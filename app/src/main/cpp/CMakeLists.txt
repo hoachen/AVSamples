@@ -7,21 +7,43 @@ cmake_minimum_required(VERSION 3.10.2)
 
 # Declares and names the project.
 
-project("samples")
+set(FFMPEG_ROOT ${CMAKE_CURRENT_LIST_DIR}/ffmpeg/${ANDROID_ABI})
+set(FFMPEG_LIB ${FFMPEG_ROOT}/lib)
+set(FFMPEG_HEADER ${FFMPEG_ROOT}/include)
+
+include_directories(${FFMPEG_HEADER})
+#include_directories(${FFMPEG_ROOT})
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
+file(GLOB media-source media_jni.c log.h audio_decode.c)
 
-add_library( # Sets the name of the library.
-             native-lib
+add_library(media SHARED ${media-source})
 
-             # Sets the library as a shared library.
-             SHARED
+add_library(avformat SHARED IMPORTED)
+set_target_properties(avformat PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libavformat.so)
 
-             # Provides a relative path to your source file(s).
-             native-lib.cpp )
+add_library(avcodec SHARED IMPORTED)
+set_target_properties(avcodec PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libavcodec.so)
+
+add_library(avutil SHARED IMPORTED)
+set_target_properties(avutil PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libavutil.so)
+
+add_library(avfilter SHARED IMPORTED)
+set_target_properties(avfilter PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libavfilter.so)
+
+add_library(swresample SHARED IMPORTED)
+set_target_properties(swresample PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libswresample.so)
+
+add_library(swscale SHARED IMPORTED)
+set_target_properties(swscale PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libswscale.so)
+
+
+add_library(postproc SHARED IMPORTED)
+set_target_properties(postproc PROPERTIES IMPORTED_LOCATION ${FFMPEG_LIB}/libpostproc.so)
+
 
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -41,8 +63,8 @@ find_library( # Sets the name of the path variable.
 # build script, prebuilt third-party libraries, or system libraries.
 
 target_link_libraries( # Specifies the target library.
-                       native-lib
+                       media
 
                        # Links the target library to the log library
                        # included in the NDK.
-                       ${log-lib} )
+                       ${log-lib} android OpenSLES EGL GLESv2 avfilter avformat avcodec swscale avutil swresample postproc)
