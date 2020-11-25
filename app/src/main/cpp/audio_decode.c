@@ -99,6 +99,15 @@ int decode_audio(const char *src, const char *dest)
         }
         av_packet_unref(&pkt);
     }
+    if (ret == AVERROR_EOF) {
+        ret = avcodec_decode_audio4(codec_ctx, frame, &got_frame, &pkt);
+        if (got_frame) {
+            data_size = av_get_bytes_per_sample(codec_ctx->sample_fmt);
+            for (i = 0; i < frame->nb_samples; i++)
+                for (ch = 0; ch < codec_ctx->channels; ch++)
+                    fwrite(frame->data[ch] + data_size * i, 1, data_size, file);
+        }
+    }
     ret = 0;
     av_packet_unref(&pkt);
 
