@@ -5,6 +5,7 @@ import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
+import android.os.SystemClock;
 import android.util.Log;
 
 import com.av.samples.base.GLTextureOutputRenderer;
@@ -38,6 +39,10 @@ public class CameraCapture extends GLTextureOutputRenderer implements ICameraCap
     protected SurfaceTexture mCamTexture;
     private CameraListener mCameraListener;
     protected volatile boolean mISCapturing = false;
+    private long mFirstSystemTimeUs;
+    private long mFirstPtsUs;
+    protected long mDropFrames;
+    protected long mFrameCount;
 
     public CameraCapture(Context context) {
         this(context, CAMERA_POS_FRONT_CAMERA, 0);
@@ -137,7 +142,12 @@ public class CameraCapture extends GLTextureOutputRenderer implements ICameraCap
         }
         mIsCameraOpened = false;
         mCameraChanged = true;
-        onDrawFrame();
+        runOnGLThread(new Runnable() {
+            @Override
+            public void run() {
+                onDrawFrame();
+            }
+        });
     }
 
     @Override
@@ -360,19 +370,54 @@ public class CameraCapture extends GLTextureOutputRenderer implements ICameraCap
 
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+        // 主线程
         if (!mIsCameraOpened) {
             if (mCameraListener != null) {
                 mCameraListener.onCameraStatus(CAMERA_OPEN_SUCCESS);
             }
             mIsCameraOpened = true;
         }
-        if (mISCapturing) {
-            try {
-                mCamTexture.updateTexImage();
-                mCamTexture.getTransformMatrix(mMatrix);
-            } catch (Exception e) {
+
+        runOnGLThread(new Runnable() {
+            @Override
+            public void run() {
+
+                // 运行到GL线程
+                if (mISCapturing) {
+                    long curTextureTimeUs = mCamTexture.getTimestamp() / 1000;
+                    long curSystemTimeUs = System.nanoTime() / 1000;
+
+                    if (mFirstSystemTimeUs == 0) {
+                        mFirstSystemTimeUs = curSystemTimeUs;
+                    }
+                    long systemDeltaUs = curSystemTimeUs - mFirstSystemTimeUs;
+
+                    try {
+                        mCamTexture.updateTexImage();
+                        mCamTexture.getTransformMatrix(mMatrix);
+                    } catch (Exception e) {
+                    }
+
+                    if (mFirstPtsUs == 0) {
+                        mFirstPtsUs = curTextureTimeUs;
+                    }
+                    makeAsDirty();
+                    mCurTimestampUs = curTextureTimeUs - mFirstPtsUs;
+                    if (Math.abs(systemDeltaUs - mCurTimestampUs) >= 500 * 1000) {
+                        mCurTimestampUs = systemDeltaUs;
+                    }
+                    if (mISCapturing) {
+                        boolean needDrop = mFrameCount / (mCurTimestampUs / 1000000.0f) > mFrameRate;
+                        if (needDrop) {
+                            mDropFrames++;
+                        } else {
+                            mFrameCount++;
+                            onDrawFrame();
+                        }
+                    }
+                }
             }
-            // 处理丢帧
-        }
+        });
+
     }
 }

@@ -3,21 +3,14 @@ package com.av.samples;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.Manifest;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.TextView;
 
-import com.av.samples.decoder.AudioDecoder;
+import com.av.samples.demux.VideoSplit;
 import com.tbruyelle.rxpermissions2.RxPermissions;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -30,7 +23,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        findViewById(R.id.btn_decoder_audio).setOnClickListener(this);
+        findViewById(R.id.btn_split_video).setOnClickListener(this);
     }
 
     @Override
@@ -40,9 +33,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         permissions.request(Manifest.permission.READ_EXTERNAL_STORAGE,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE,
                 Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.READ_PHONE_STATE,
-                Manifest.permission.MODIFY_AUDIO_SETTINGS)
+                Manifest.permission.RECORD_AUDIO)
                 .subscribe(granted -> {
                 }, throwable -> {
 
@@ -50,18 +41,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
-
-    public void startDecoderAudio() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                String srcFile = "/storage/emulated/0/Android/data/com.av.samples/files/ws_30.mp3";
-                String desFile = "/storage/emulated/0/Android/data/com.av.samples/files/ws_30.pcm";
-                AudioDecoder decoder = new AudioDecoder();
-                decoder.decodeAudio(srcFile, desFile);
-            }
-        }).start();
-    }
 
 
     /**
@@ -73,9 +52,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.btn_decoder_audio:
-                startDecoderAudio();
+            case R.id.btn_split_video:
+                Log.i("CHHH", "start startSplitVideo");
+                startSplitVideo();
                 break;
         }
+    }
+
+    private void startSplitVideo() {
+        final String path = getExternalFilesDir("") + "/";
+        Log.i("CHHH", "path:" + path);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String inputFile = path + "new_video.mp4";
+                String outputDir = path + "new_temps";
+                File file = new File(outputDir);
+                if (!file.exists()) {
+                    file.mkdirs();
+                }
+                VideoSplit split = new VideoSplit();
+                split.splitVideo(inputFile, outputDir);
+                Log.i("CHHH", "startSplitVideo end");
+            }
+        }).start();
     }
 }

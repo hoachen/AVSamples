@@ -48,7 +48,6 @@ public abstract class GLRenderer {
         mTextureVertices = new FloatBuffer[4];
         setTextVertices(0.0f, 0.0f, 1.0f, 1.0f);
         mCurRotation = 0;
-
     }
 
     /**
@@ -370,6 +369,10 @@ public abstract class GLRenderer {
             GLES20.glDeleteShader(mFragmentShader);
             mFragmentShader = 0;
         }
+    }
+
+    public void runOnGLThread(Runnable runnable) {
+        GLRenderThread.sharedThread().runOnGLThread(runnable);
     }
 
 }

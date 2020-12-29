@@ -10,7 +10,7 @@ import java.util.List;
 
 public abstract class GLTextureOutputRenderer extends GLRenderer {
 
-    protected long mCurTimestampus;
+    protected long mCurTimestampUs;
 
     protected int[] frameBuffer;
 
@@ -144,7 +144,7 @@ public abstract class GLTextureOutputRenderer extends GLRenderer {
         }
         synchronized (mLock) {
             for(GLTextureInputRenderer target : mTargets) {
-                target.newTextureReady(getTextureOut(), this, newData, mCurTimestampus);
+                target.newTextureReady(getTextureOut(), this, newData, mCurTimestampUs);
             }
         }
     }

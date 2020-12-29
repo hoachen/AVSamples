@@ -3,14 +3,14 @@
 //
 #include <jni.h>
 #include "log.h"
-#include "audio_decode.h"
+#include "video_split.h"
 
 #ifndef NELEM
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
 #endif
 
 #define MAIN_CLASS  "com/av/samples/MainActivity"
-#define AUDIO_DECODER_CLASS "com/av/samples/decoder/AudioDecoder"
+#define VIDEO_SPLIT_CLASS "com/av/samples/demux/VideoSplit"
 
 // 静态注册
 //JNIEXPORT jstring JNICALL
@@ -33,22 +33,27 @@ static JNINativeMethod main_methods[] = {
         {"stringFromJNI", "()Ljava/lang/String;", JNI_string_helloworld}
 };
 
-static jint JNI_decoder_audio(JNIEnv *env, jclass class, jstring src, jstring des) {
+//
+static jint JNI_split_video(JNIEnv *env, jclass class, jstring input_file, jstring output_dir)
+{
     int ret = 0;
-    char *src_file_str = (*env)->GetStringUTFChars(env, src, 0);
-    char *des_file_str = (*env)->GetStringUTFChars(env, des, 0);
-    ret = decode_audio(src_file_str, des_file_str);
-    LOGI("decoder audio ret = %d", ret);
-    (*env)->ReleaseStringUTFChars(env, src, src_file_str);
-    (*env)->ReleaseStringUTFChars(env, des, des_file_str);
+    char *input_file_str = (*env)->GetStringUTFChars(env, input_file, 0);
+    char *output_dir_str = (*env)->GetStringUTFChars(env, output_dir, 0);
+    ret = split_video(input_file_str, output_dir_str);
+    (*env)->ReleaseStringUTFChars(env, input_file, input_file_str);
+    (*env)->ReleaseStringUTFChars(env, output_dir, output_dir_str);
     return ret;
 }
 
-static JNINativeMethod audio_decoder_methods[] = {
-        {"_decodeAudio", "(Ljava/lang/String;Ljava/lang/String;)I", JNI_decoder_audio}
+static JNINativeMethod video_split_methods[] = {
+        {"_splitVideo", "(Ljava/lang/String;Ljava/lang/String;)I", JNI_split_video}
 };
 
+
+
 // 动态注册
+
+
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     JNIEnv* env = NULL;
@@ -59,8 +64,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     (*env)->RegisterNatives(env, main_class, main_methods, NELEM(main_methods));
     (*env)->DeleteLocalRef(env, main_class);
 
-    jclass audio_decode_class = (*env)->FindClass(env, AUDIO_DECODER_CLASS);
-    (*env)->RegisterNatives(env, audio_decode_class, audio_decoder_methods, NELEM(audio_decoder_methods));
-    (*env)->DeleteLocalRef(env, audio_decode_class);
+    jclass video_split_class = (*env)->FindClass(env, VIDEO_SPLIT_CLASS);
+    (*env)->RegisterNatives(env, video_split_class, video_split_methods, NELEM(video_split_methods));
+    (*env)->DeleteLocalRef(env, video_split_class);
     return JNI_VERSION_1_6;
 }

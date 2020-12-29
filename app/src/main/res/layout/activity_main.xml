@@ -9,8 +9,8 @@
 
 
     <Button
-        android:id="@+id/btn_decoder_audio"
+        android:id="@+id/btn_split_video"
         android:layout_width="match_parent"
-        android:text="start decode audio"
+        android:text="start split video"
         android:layout_height="60dp"/>
 </LinearLayout>
