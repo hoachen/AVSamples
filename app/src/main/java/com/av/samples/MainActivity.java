@@ -66,14 +66,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void run() {
                 String inputFile = path + "new_video.mp4";
-                String outputDir = path + "new_temps";
+                String outputDir = path + "new_video_temps";
                 File file = new File(outputDir);
+                file.deleteOnExit();
                 if (!file.exists()) {
                     file.mkdirs();
                 }
+                Log.i("CHHH", "split to yuv start");
                 VideoSplit split = new VideoSplit();
-                split.splitVideo(inputFile, outputDir);
-                Log.i("CHHH", "startSplitVideo end");
+                int fileCount = split.splitVideoToYuv(inputFile, outputDir);
+                Log.i("CHHH", "split to yuv end");
             }
         }).start();
     }

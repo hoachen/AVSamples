@@ -9,7 +9,7 @@ static int start_write_item(AVFormatContext **oc, AVStream *in_stream, AVStream 
 {
     int ret = 0;
     char filename[1024] = {'\0'};
-    sprintf(filename, "%s/temp_%d.mp4", output_dir, index);
+    sprintf(filename, "%s/%s_%d.mp4", output_dir, TEMP_FILE_NAME, index);
     LOGI("start write to temp file %s", filename);
     ret = avformat_alloc_output_context2(oc, NULL, "mp4", filename);
     if (ret) {
@@ -33,7 +33,6 @@ static int start_write_item(AVFormatContext **oc, AVStream *in_stream, AVStream 
             return AVERROR(ret);
         }
     }
-//    av_dump_format(oc, 0, filename, 1);
     ret = avformat_write_header(*oc, NULL);
     LOGI("avformat_write_header end ret = %d", ret);
     return ret;
@@ -47,15 +46,11 @@ static int write_item_packet(AVFormatContext *oc, AVStream *in_stream, AVStream 
         return -1;
     }
     int ret;
-//    pkt->pts = pts;
-//    pkt->dts = dts;
     pkt->pts = av_rescale_q_rnd(pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
     pkt->dts = av_rescale_q_rnd(dts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
     pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
     pkt->pos = -1;
-    LOGI("write_item_packet pks %ld, dts %ld, duration %ld start", pkt->pts, pkt->dts, pkt->duration);
     ret = av_interleaved_write_frame(oc, pkt);
-    LOGI("write_item_packet pks %ld, dts %ld, duration %ld end", pkt->pts, pkt->dts, pkt->duration);
     return ret;
 }
 
@@ -84,7 +79,7 @@ int split_video(const char *input_file, const char *output_dir)
     LOGI("start split video %s to %s", input_file, output_dir);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
-        LOGI("avformat_open_input failed %s", av_err2str(ret));
+        LOGI("open input format failed %s", av_err2str(ret));
         return AVERROR(ret);
     }
     ret = avformat_find_stream_info(ic, NULL);
@@ -92,7 +87,6 @@ int split_video(const char *input_file, const char *output_dir)
         avformat_close_input(&ic);
         return AVERROR(ret);
     }
-//    av_dump_format(ic, 0, input_file, 1);
     for (i = 0; i < ic->nb_streams; i++) {
         AVStream *stream = ic->streams[i];
         if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -110,23 +104,25 @@ int split_video(const char *input_file, const char *output_dir)
     while ((ret = av_read_frame(ic, &pkt)) >= 0) {
         if (pkt.stream_index == video_index) {
             if (pkt.flags & AV_PKT_FLAG_KEY) { // 判断是I帧
+                LOGI("read key frame at pts %ld, dts %ld", pkt.pts, pkt.dts);
                 close_write_item(&oc);
-                start_write_item(&oc, in_stream, &out_stream, output_dir, index++);
+                ret = start_write_item(&oc, in_stream, &out_stream, output_dir, index++);
+                if (ret < 0)
+                    break;
                 last_pts = pkt.pts;
                 last_dts = pkt.dts;
             }
             int64_t pts = pkt.pts - last_pts;
             int64_t dts = pkt.dts - last_dts;
-            LOGI("start write packet to %d file, pts %ld, dts %ld", index, pts, dts);
-            write_item_packet(oc, in_stream, out_stream, &pkt, pts, dts);
-            LOGI("start write packet to %d file, pts %ld, dts %ld end", index, pts, dts);
+            ret = write_item_packet(oc, in_stream, out_stream, &pkt, pts, dts);
+            if (ret < 0)
+                break;
         }
         av_packet_unref(&pkt);
     }
-    LOGI("video split end");
     close_write_item(&oc);
     if (ic != NULL)
         avformat_close_input(&ic);
     LOGI("video split done");
-    return 0;
+    return index;
 }
