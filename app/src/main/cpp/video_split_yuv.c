@@ -62,27 +62,24 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
     return 1;
 }
 
-int split_yuv(const char *input_file, const char *output_dir)
+int split_yuv(const char *input_file, const char *output_file)
 {
     LOGI("video split to yuv start");
     int video_index = -1;
     int ret = 0, i = 0;
-    int index = 0;
     FILE *file = NULL;
     AVFormatContext  *ic = NULL;
     AVCodecContext  *decode_ctx;
     AVCodec         *decode;
     AVPacket pkt;
     AVFrame *frame = NULL;
-    char *filename[1024] = {'\0'};
-    sprintf(filename, "%s/temp.yuv", output_dir);
 
-    file = fopen(filename, "wb");
+    file = fopen(output_file, "wb");
     if (!file) {
-        LOGE("open file %s failed..", filename);
+        LOGE("open file %s failed..", output_file);
         return -1;
     }
-    LOGI("start split video %s to %s", input_file, filename);
+    LOGI("start split video %s to %s", input_file, output_file);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
         LOGI("open input format failed %s", av_err2str(ret));
@@ -142,20 +139,32 @@ int split_yuv(const char *input_file, const char *output_dir)
             }
             LOGI("to decoder video %d", got_frame);
             if (got_frame == 1) {
-                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, &frame);
+                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
                 frame_count++;
             }
         }
         av_packet_unref(&pkt);
-        if (frame_count >= 250)
+        if (frame_count >= 250) {
+            LOGI("has write frame %d", frame_count);
             break;
+        }
+
     }
+    avcodec_flush_buffers(decode_ctx);
+    got_frame = avcodec_receive_frame(decode_ctx, frame);
+    if (got_frame == 0) {
+        LOGI("avcodec_flush_buffers frame");
+        frame_count++;
+        write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
+    }
+
     if (frame) {
         av_frame_free(&frame);
     }
+    LOGI("split yuv done");
     if (decode_ctx) {
         avcodec_close(decode_ctx);
-        avcodec_free_context(decode_ctx);
+        avcodec_free_context(&decode_ctx);
     }
 
     if (ic != NULL)
@@ -163,5 +172,5 @@ int split_yuv(const char *input_file, const char *output_dir)
     if (file)
         fclose(file);
     LOGI("video split to yuv done");
-    return index;
+    return frame_count;
 }

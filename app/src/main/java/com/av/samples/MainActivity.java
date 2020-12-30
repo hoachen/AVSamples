@@ -24,6 +24,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         findViewById(R.id.btn_split_video).setOnClickListener(this);
+        findViewById(R.id.btn_save_yuv).setOnClickListener(this);
     }
 
     @Override
@@ -53,8 +54,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.btn_split_video:
-                Log.i("CHHH", "start startSplitVideo");
                 startSplitVideo();
+                break;
+            case R.id.btn_save_yuv:
+                saveToYuvFile();
                 break;
         }
     }
@@ -72,10 +75,35 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 if (!file.exists()) {
                     file.mkdirs();
                 }
-                Log.i("CHHH", "split to yuv start");
+                Log.i("CHHH", "split to video start");
                 VideoSplit split = new VideoSplit();
-                int fileCount = split.splitVideoToYuv(inputFile, outputDir);
-                Log.i("CHHH", "split to yuv end");
+                int fileCount = split.splitVideo(inputFile, outputDir);
+                Log.i("CHHH", "split to video end file count:" + fileCount);
+            }
+        }).start();
+    }
+
+    private void saveToYuvFile() {
+        final String path = getExternalFilesDir("") + "/";
+        Log.i("CHHH", "path:" + path);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+//                String inputFile = path + "new_video_temps/temp_0.mp4";
+                String outputDir = path + "new_video_temps";
+                File file = new File(outputDir);
+                file.deleteOnExit();
+                if (!file.exists()) {
+                    file.mkdirs();
+                }
+                VideoSplit split = new VideoSplit();
+                for (int i = 0; i < 17; i++) {
+                    String inputFile = path + "new_video_temps/temp_" + i + ".mp4";
+                    String outputFile = path + "new_video_temps/temp_" + i + ".yuv";
+                    Log.i("CHHH", "decoder" + i + " video to yuv start");
+                    int fileCount = split.splitVideoToYuv(inputFile, outputFile);
+                    Log.i("CHHH", "decoder" + i + " video to yuv end fileCount:" + fileCount);
+                }
             }
         }).start();
     }

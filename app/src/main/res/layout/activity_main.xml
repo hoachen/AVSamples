@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="40dp"
+    android:orientation="vertical"
     tools:context=".MainActivity">
 
 
@@ -12,5 +13,11 @@
         android:id="@+id/btn_split_video"
         android:layout_width="match_parent"
         android:text="start split video"
+        android:layout_height="60dp"/>
+
+    <Button
+        android:id="@+id/btn_save_yuv"
+        android:layout_width="match_parent"
+        android:text="save to yuv file"
         android:layout_height="60dp"/>
 </LinearLayout>
