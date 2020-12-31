@@ -11,33 +11,13 @@ int write_yuv420_to_file(FILE *file, int width, int height, AVFrame *frame)
         return -1;
     }
     LOGI("Write a frame to yuv file %dx%d frame %dx%d", width, height, frame->width, frame->height);
-//    fwrite(frame->data[0],1, width * height,   file);     //Y
-//    fwrite(frame->data[1],1, width * height / 4, file);  //U
-//    fwrite(frame->data[2],1, width * height / 4, file);  //V
-    int y_size = width * height;
-    fwrite(frame->data[0], 1, y_size, file);
-    fwrite(frame->data[1], 1, y_size / 4, file);
-    fwrite(frame->data[2], 1, y_size / 4, file);
-//
-//    // 写Y分量
-//    for (size_t i = 0; i < frame->height; i++)
-//    {
-//        fwrite(frame->data[0] + frame->linesize[0] * i, 1, frame->width, file);
-//    }
-//
-//    // 写U分量
-//    for (size_t i = 0; i < frame->height / 2; i++)
-//    {
-//        fwrite(frame->data[1] + frame->linesize[1] * i, 1, frame->width / 2, file);
-//    }
-//
-//    // 写V分量
-//    for (size_t i = 0; i < frame->height / 2; i++)
-//    {
-//        fwrite(frame->data[2] + frame->linesize[2] * i, 1, frame->width / 2, file);
-//    }
-
-
+    fwrite(frame->data[0],1, width * height,   file);     //Y
+    fwrite(frame->data[1],1, width * height / 4, file);  //U
+    fwrite(frame->data[2],1, width * height / 4, file);  //V
+//    int y_size = width * height;
+//    fwrite(frame->data[0], 1, y_size, file);
+//    fwrite(frame->data[1], 1, y_size / 4, file);
+//    fwrite(frame->data[2], 1, y_size / 4, file);
     LOGI("Write a frame to yuv file 1");
     return 0;
 }
@@ -73,6 +53,8 @@ int split_yuv(const char *input_file, const char *output_file)
     AVCodec         *decode;
     AVPacket pkt;
     AVFrame *frame = NULL;
+    AVFrame *frame_yuv = NULL;
+    struct SwsContext *sws_ctx = NULL;
 
     file = fopen(output_file, "wb");
     if (!file) {
@@ -123,9 +105,19 @@ int split_yuv(const char *input_file, const char *output_file)
         return -1;
     }
 
+    frame = av_frame_alloc();
+    frame_yuv = av_frame_alloc();
+
+    uint8_t *out_buffer = (uint8_t *)av_malloc(av_image_get_buffer_size(AV_PIX_FMT_YUV420P, decode_ctx->width, decode_ctx->height,1));
+    //初始化缓冲区
+    av_image_fill_arrays(frame_yuv->data, frame_yuv->linesize, out_buffer, AV_PIX_FMT_YUV420P, decode_ctx->width, decode_ctx->height, 1);
+    sws_ctx = sws_getContext(decode_ctx->width, decode_ctx->height, decode_ctx->pix_fmt,
+                                                decode_ctx->width, decode_ctx->height, AV_PIX_FMT_YUV420P,
+                                                SWS_BICUBIC, NULL, NULL, NULL);
     int frame_count = 0;
     int got_frame = 0;
-    frame = av_frame_alloc();
+
+
     while ((ret = av_read_frame(ic, &pkt)) >= 0) {
         if (pkt.stream_index == video_index) {
             LOGI("to decoder video");
@@ -139,7 +131,9 @@ int split_yuv(const char *input_file, const char *output_file)
             }
             LOGI("to decoder video %d", got_frame);
             if (got_frame == 1) {
-                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
+                sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
+                          frame_yuv->data, frame_yuv->linesize);
+                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame_yuv);
                 frame_count++;
             }
         }
@@ -155,7 +149,9 @@ int split_yuv(const char *input_file, const char *output_file)
     if (got_frame == 0) {
         LOGI("avcodec_flush_buffers frame");
         frame_count++;
-        write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
+        sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
+                  frame_yuv->data, frame_yuv->linesize);
+        write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame_yuv);
     }
 
     if (frame) {

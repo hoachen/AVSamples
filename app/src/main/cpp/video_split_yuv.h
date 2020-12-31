@@ -7,6 +7,8 @@
 
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
+#include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
 
 
 int split_yuv(const char *input_file, const char *output_dir);
