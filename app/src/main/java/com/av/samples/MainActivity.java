@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
         findViewById(R.id.btn_split_video).setOnClickListener(this);
         findViewById(R.id.btn_save_yuv).setOnClickListener(this);
+        findViewById(R.id.btn_player_yuv).setOnClickListener(this);
     }
 
     @Override
@@ -59,6 +60,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.btn_save_yuv:
                 saveToYuvFile();
                 break;
+            case R.id.btn_player_yuv:
+                playerYuvFile();
+                break;
         }
     }
 
@@ -68,8 +72,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String inputFile = path + "new_video.mp4";
-                String outputDir = path + "new_video_temps";
+                String inputFile = path + "uaJ9p480p.mp4";
+                String outputDir = path + "uaJ9p480p_temp";
                 File file = new File(outputDir);
                 file.deleteOnExit();
                 if (!file.exists()) {
@@ -90,21 +94,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void run() {
 //                String inputFile = path + "new_video_temps/temp_0.mp4";
-                String outputDir = path + "new_video_temps";
+                String outputDir = path + "uaJ9p480p_temp";
                 File file = new File(outputDir);
                 file.deleteOnExit();
                 if (!file.exists()) {
                     file.mkdirs();
                 }
                 VideoSplit split = new VideoSplit();
-                for (int i = 0; i < 17; i++) {
-                    String inputFile = path + "new_video_temps/temp_" + i + ".mp4";
-                    String outputFile = path + "new_video_temps/temp_" + i + ".yuv";
+                for (int i = 0; i < 2; i++) {
+                    String inputFile = path + "uaJ9p480p_temp/temp_" + i + ".mp4";
+                    String outputFile = path + "uaJ9p480p_temp/temp_" + i + ".yuv";
                     Log.i("CHHH", "decoder" + i + " video to yuv start");
                     int fileCount = split.splitVideoToYuv(inputFile, outputFile);
                     Log.i("CHHH", "decoder" + i + " video to yuv end fileCount:" + fileCount);
                 }
             }
         }).start();
+    }
+
+    private void playerYuvFile() {
+        final String path = getExternalFilesDir("") + "/";
+        String url = path + "uaJ9p480p_temp/temp_" + 0 + ".yuv";
+        PlayerActivity.startActivity(this, url, 480, 854);
     }
 }

@@ -131,9 +131,9 @@ int split_yuv(const char *input_file, const char *output_file)
             }
             LOGI("to decoder video %d", got_frame);
             if (got_frame == 1) {
-                sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
-                          frame_yuv->data, frame_yuv->linesize);
-                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame_yuv);
+//                sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
+//                          frame_yuv->data, frame_yuv->linesize);
+                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
                 frame_count++;
             }
         }
@@ -149,9 +149,9 @@ int split_yuv(const char *input_file, const char *output_file)
     if (got_frame == 0) {
         LOGI("avcodec_flush_buffers frame");
         frame_count++;
-        sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
-                  frame_yuv->data, frame_yuv->linesize);
-        write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame_yuv);
+//        sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
+//                  frame_yuv->data, frame_yuv->linesize);
+        write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
     }
 
     if (frame) {

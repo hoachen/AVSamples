@@ -4,26 +4,18 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="40dp"
     android:orientation="vertical"
     tools:context=".MainActivity">
 
-
     <Button
-        android:id="@+id/btn_split_video"
+        android:id="@+id/btn_start"
         android:layout_width="match_parent"
-        android:text="start split video"
+        android:text="start play yuv file"
         android:layout_height="60dp"/>
 
-    <Button
-        android:id="@+id/btn_save_yuv"
+    <SurfaceView
+        android:id="@+id/surface_view"
         android:layout_width="match_parent"
-        android:text="save to yuv file"
-        android:layout_height="60dp"/>
+        android:layout_height="match_parent"/>
 
-    <Button
-        android:id="@+id/btn_player_yuv"
-        android:layout_width="match_parent"
-        android:text="player yuv file"
-        android:layout_height="60dp"/>
 </LinearLayout>
