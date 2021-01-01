@@ -132,7 +132,6 @@ static int init_program_handle(GLRenderer *renderer)
 
     renderer->textCoord_handle = glGetAttribLocation(renderer->program, "aTextCoord");
 
-    LOGI("%s, call glGetTextures", __func__ );
     glGenTextures(3, renderer->textures);
 
 }
@@ -177,7 +176,7 @@ static void set_shader_value(GLRenderer *renderer)
     glUniform1i(glGetUniformLocation(renderer->program, "vTexture"), 2);
 }
 
-int gl_renderer_render(GLRenderer *renderer, unsigned char *buffer[], int video_width, int video_height)
+int gl_renderer_render(GLRenderer *renderer, unsigned char **buffer, int video_width, int video_height)
 {
     LOGI("%s frame %dx%d", __func__, video_width, video_height);
     if (EGL_TRUE != eglMakeCurrent(renderer->eglDisplay, renderer->eglSurface, renderer->eglSurface, renderer->eglContext)) {
@@ -185,22 +184,17 @@ int gl_renderer_render(GLRenderer *renderer, unsigned char *buffer[], int video_
         return -1;
     }
     glViewport(0, 0, renderer->window_width, renderer->window_height);
-    LOGI("%s glViewport %dx%d", __func__, renderer->window_width, renderer->window_height);
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     set_shader_value(renderer);
     glActiveTexture(GL_TEXTURE0);
     bind_texture(renderer->textures[0], video_width, video_height, buffer[0]);
-    LOGI("%s bind_texture 0", __func__);
     glActiveTexture(GL_TEXTURE1);
     bind_texture(renderer->textures[1], video_width / 2, video_height / 2, buffer[1]);
-    LOGI("%s bind_texture 1", __func__);
     glActiveTexture(GL_TEXTURE2);
     bind_texture(renderer->textures[2], video_width / 2, video_height / 2, buffer[2]);
-    LOGI("%s bind_texture 2", __func__);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     eglSwapBuffers(renderer->eglDisplay, renderer->eglSurface);
-    LOGI("%s eglSwapBuffers", __func__);
     return 0;
 }
 
