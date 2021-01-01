@@ -187,7 +187,7 @@ int gl_renderer_render(GLRenderer *renderer, unsigned char *buffer[], int video_
     glViewport(0, 0, renderer->window_width, renderer->window_height);
     LOGI("%s glViewport %dx%d", __func__, renderer->window_width, renderer->window_height);
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glClearColor(0, 0, 0, 0);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     set_shader_value(renderer);
     glActiveTexture(GL_TEXTURE0);
     bind_texture(renderer->textures[0], video_width, video_height, buffer[0]);

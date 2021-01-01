@@ -10,12 +10,19 @@ static void video_render_thread(void *arg)
     YUVPlayer *player = (YUVPlayer *)arg;
     gl_renderer_init(player->renderer, player->window, player->window_width, player->window_height);
     LOGI("gl_renderer_init");
-    unsigned char *buffer[3] = {0};
+    unsigned char *buffer[3];
     int32_t ysize = player->video_width * player->video_height;
-    buffer[0] = malloc(sizeof(ysize)); // y
-    buffer[1] = malloc(sizeof(ysize / 4)); // y
-    buffer[2] = malloc(sizeof(ysize / 4)); // y
-    for (;;) {
+    buffer[0] = malloc( sizeof(unsigned char) * ysize); // y
+    buffer[1] = malloc(sizeof(unsigned char) * ysize / 4); // u
+    buffer[2] = malloc(sizeof(unsigned char) * ysize / 4); // v
+    int64_t frame_size = ysize  + ysize / 4 + ysize / 4;
+    size_t file_size = 0;
+    fseek(player->file, 0, SEEK_END); // seek 到了末尾
+    file_size = ftell(player->file);
+    int64_t frame_count = file_size / frame_size;
+    int frame_index = 0;
+    LOGI("a frame size is %ld, file_size is %ld, frame count %d", frame_size, file_size, frame_count);
+    do {
         if (player->abort_request) {
             LOGE("has abort exit render thread");
             break;
@@ -28,14 +35,18 @@ static void video_render_thread(void *arg)
         pthread_mutex_unlock(&player->mutex);
         LOGI("start to render a frame");
         // 读取yuv数据
+        int ret = 0;
         size_t read_size = 0;
+        frame_index++;
+        long seek_offset = -frame_index * frame_size;
+        ret = fseek(player->file, seek_offset, SEEK_END);
+        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
         read_size = fread(buffer[0], 1, ysize, player->file); // y
         LOGI("read y data size %d", read_size);
         read_size = fread(buffer[1], 1, ysize / 4, player->file); // u
         LOGI("read u data size %d", read_size);
         fread(buffer[2], 1, ysize / 4 ,player->file); // v
         LOGI("read v data size %d", read_size);
-        int ret;
         ret = gl_renderer_render(player->renderer, buffer, player->video_width, player->video_height);
         if (ret < 0) {
             LOGE("gl render failed...");
@@ -45,7 +56,8 @@ static void video_render_thread(void *arg)
             break;
         }
         usleep(40 * 1000);
-    }
+    } while (frame_index < frame_count);
+    LOGE("render thread end");
     free(buffer[0]);
     free(buffer[1]);
     free(buffer[2]);
