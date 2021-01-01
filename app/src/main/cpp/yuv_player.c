@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include "yuv_player.h"
 
-static void video_render_thread(void *arg)
+static void render_thread(void *arg)
 {
     YUVPlayer *player = (YUVPlayer *)arg;
     gl_renderer_init(player->renderer, player->window, player->window_width, player->window_height);
@@ -90,7 +90,7 @@ static int yuv_player_prepare_l(YUVPlayer *player)
         LOGE("open yuv file failed...");
         return -1;
     }
-    pthread_create(&player->video_render_th, NULL, video_render_thread, player);
+    pthread_create(&player->video_render_th, NULL, render_thread, player);
     LOGI("start video_render_thread");
     return 0;
 }

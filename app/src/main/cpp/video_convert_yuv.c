@@ -2,7 +2,7 @@
 // Created by chenhao on 12/30/20.
 //
 
-#include "video_split_yuv.h"
+#include "video_convert_yuv.h"
 #include "log.h"
 
 int write_yuv420_to_file(FILE *file, int width, int height, AVFrame *frame)
@@ -42,7 +42,9 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
     return 1;
 }
 
-int split_yuv(const char *input_file, const char *output_file)
+int convert_to_yuv420(const char *input_file, const char *output_file,
+        int *frame_width, int *frame_height,
+        int64_t *duration)
 {
     LOGI("video split to yuv start");
     int video_index = -1;
@@ -85,6 +87,9 @@ int split_yuv(const char *input_file, const char *output_file)
         return -1;
     }
     AVStream  *video_stream = ic->streams[video_index];
+    *frame_width = video_stream->codecpar->width;
+    *frame_height = video_stream->codecpar->height;
+    *duration = video_stream->duration;
     decode = avcodec_find_decoder(video_stream->codecpar->codec_id);
     if (decode == NULL) {
         avformat_close_input(&ic);
@@ -98,6 +103,7 @@ int split_yuv(const char *input_file, const char *output_file)
         return -1;
     }
     avcodec_parameters_to_context(decode_ctx, video_stream->codecpar);
+
     ret = avcodec_open2(decode_ctx, decode, NULL);
     if (ret != 0) {
         avcodec_free_context(&decode_ctx);

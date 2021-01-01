@@ -8,7 +8,6 @@
     android:orientation="vertical"
     tools:context=".MainActivity">
 
-
     <Button
         android:id="@+id/btn_split_video"
         android:layout_width="match_parent"
@@ -25,5 +24,12 @@
         android:id="@+id/btn_player_yuv"
         android:layout_width="match_parent"
         android:text="player yuv file"
+        android:layout_height="60dp"/>
+
+
+    <Button
+        android:id="@+id/btn_reverse_video"
+        android:layout_width="match_parent"
+        android:text="reverse play video"
         android:layout_height="60dp"/>
 </LinearLayout>

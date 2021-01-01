@@ -11,7 +11,7 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-public class PlayerActivity  extends AppCompatActivity implements SurfaceHolder.Callback {
+public class YUVPlayerActivity extends AppCompatActivity implements SurfaceHolder.Callback {
 
     private static final String TAG = "PlayerActivity";
 
@@ -28,7 +28,7 @@ public class PlayerActivity  extends AppCompatActivity implements SurfaceHolder.
     private int videoHeight;
 
     public static void startActivity(Context context, String url, int width, int height) {
-        Intent intent = new Intent(context, PlayerActivity.class);
+        Intent intent = new Intent(context, YUVPlayerActivity.class);
         intent.putExtra(KEY_URL, url);
         intent.putExtra(KEY_VIDEO_WIDTH, width);
         intent.putExtra(KEY_VIDEO_HEIGHT, height);

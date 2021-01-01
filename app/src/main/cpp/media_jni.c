@@ -4,9 +4,9 @@
 #include <jni.h>
 #include "log.h"
 #include "video_split.h"
-#include "video_split_yuv.h"
-#include "xplayer.h"
+#include "video_convert_yuv.h"
 #include "yuv_player.h"
+#include "rplayer.h"
 
 #ifndef NELEM
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
@@ -14,8 +14,8 @@
 
 #define MAIN_CLASS  "com/av/samples/MainActivity"
 #define VIDEO_SPLIT_CLASS "com/av/samples/demux/VideoSplit"
-#define XPLAYER_CLASS "com/av/samples/XPlayer"
 #define YUV_PLAYER_CLASS "com/av/samples/YUVPlayer"
+#define REVERSE_PLAYER_CLASS "com/av/samples/ReversePlayer"
 
 // 静态注册
 //JNIEXPORT jstring JNICALL
@@ -56,7 +56,10 @@ static jint JNI_split_video_to_yuv(JNIEnv *env, jclass class, jstring input_file
     int ret = 0;
     char *input_file_str = (*env)->GetStringUTFChars(env, input_file, 0);
     char *output_dir_str = (*env)->GetStringUTFChars(env, output_dir, 0);
-    ret = split_yuv(input_file_str, output_dir_str);
+    int width = 0;
+    int height = 0;
+    int duration = 0;
+    ret = convert_to_yuv420(input_file_str, output_dir_str, &width, &height, &duration);
     (*env)->ReleaseStringUTFChars(env, input_file, input_file_str);
     (*env)->ReleaseStringUTFChars(env, output_dir, output_dir_str);
     return ret;
@@ -68,37 +71,91 @@ static JNINativeMethod video_split_methods[] = {
 };
 
 
-static long JNI_player_create(JNIEnv *env, jclass class)
+static jlong JNI_rplayer_create(JNIEnv *env, jclass class)
 {
-    XPlayer *player = av_mallocz(sizeof(XPlayer));
-    player_init(player);
+    RPlayer *player = av_mallocz(sizeof(RPlayer));
     return (intptr_t)player;
 }
 
 
-static int JNI_player_setDataSource(JNIEnv *env, jclass class, jlong handler, jstring path)
+
+static jint JNI_rplayer_init(JNIEnv *env, jclass class, jlong handle, jobject surface,
+        jint window_width, jint window_height)
 {
-    XPlayer *player = (XPlayer *)handler;
     int ret = 0;
-    if (!player)
-        return -1;
+    RPlayer *player = (RPlayer *)handle;
+    ANativeWindow  *window = ANativeWindow_fromSurface(env, surface);
+    ret = rplayer_init(player, window, window_width, window_height);
+    return ret;
+}
+
+
+static jint JNI_rplayer_setDataSource(JNIEnv *env, jclass class, jlong handler, jstring path, jstring temp_dir)
+{
+    int ret = 0;
+    RPlayer *player = (RPlayer *)handler;
     char *path_str = (*env)->GetStringUTFChars(env, path, 0);
-    ret = player_set_data_source(player, path_str);
+    char *temp_dir_str = (*env)->GetStringUTFChars(env, temp_dir, 0);
+    ret = rplayer_set_data_source(player, path_str, temp_dir_str);
     (*env)->ReleaseStringUTFChars(env, path, path_str);
+    (*env)->ReleaseStringUTFChars(env, temp_dir, temp_dir_str);
     return ret;
 }
 
 
-static int JNI_player_prepare(JNIEnv *env, jclass class, jlong handler)
+static jint JNI_rplayer_prepare(JNIEnv *env, jclass class, jlong handler)
 {
-    XPlayer *player = (XPlayer *)handler;
+    RPlayer *player = (RPlayer *)handler;
     int ret = 0;
-    if (!player)
-        return -1;
-    ret = player_prepare(player);
+    ret = rplayer_prepare(player);
     return ret;
 }
 
+
+static jint JNI_rplayer_start(JNIEnv *env, jclass class, jlong handler)
+{
+    RPlayer *player = (RPlayer *)handler;
+    int ret = 0;
+    ret = rplayer_start(player);
+    return ret;
+}
+
+
+static jint JNI_rplayer_pause(JNIEnv *env, jclass class, jlong handler)
+{
+    RPlayer *player = (RPlayer *)handler;
+    int ret = 0;
+    ret = rplayer_pause(player);
+    return ret;
+}
+
+static jint JNI_rplayer_stop(JNIEnv *env, jclass class, jlong handler)
+{
+    RPlayer *player = (RPlayer *)handler;
+    int ret = 0;
+    ret = rplayer_stop(player);
+    return ret;
+}
+
+
+static jint JNI_rplayer_release(JNIEnv *env, jclass class, jlong handler)
+{
+    RPlayer *player = (RPlayer *)handler;
+    int ret = 0;
+    ret = rplayer_release(player);
+    return ret;
+}
+
+static JNINativeMethod rplayer_jni_methods[] = {
+        {"_create", "()J", JNI_rplayer_create},
+        {"_init", "(JLandroid/view/Surface;II)I", JNI_rplayer_init},
+        {"_prepare", "(J)I", JNI_rplayer_prepare},
+        {"_setDataSource", "(JLjava/lang/String;Ljava/lang/String;)I", JNI_rplayer_setDataSource},
+        {"_start", "(J)I", JNI_rplayer_start},
+        {"_pause", "(J)I", JNI_rplayer_pause},
+        {"_stop", "(J)I", JNI_rplayer_stop},
+        {"_release", "(J)I", JNI_rplayer_release}
+};
 
 
 static jlong JNI_yuv_player_create(JNIEnv *env, jclass class)
@@ -178,5 +235,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     (*env)->RegisterNatives(env, yuv_player_class, yuv_player_jni_methods, NELEM(yuv_player_jni_methods));
     (*env)->DeleteLocalRef(env, yuv_player_class);
 
+    jclass rplayer_class = (*env)->FindClass(env, REVERSE_PLAYER_CLASS);
+    (*env)->RegisterNatives(env, rplayer_class, rplayer_jni_methods, NELEM(rplayer_jni_methods));
+    (*env)->DeleteLocalRef(env, rplayer_class);
     return JNI_VERSION_1_6;
 }
