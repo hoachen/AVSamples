@@ -141,6 +141,8 @@ int gl_renderer_init(GLRenderer *renderer, ANativeWindow *window, int width, int
     int ret;
     renderer->window_width = width;
     renderer->window_height = height;
+    renderer->video_width = 0;
+    renderer->video_height = 0;
     ret = init_egl_context(renderer, window);
     if (ret < 0) {
         return -1;
@@ -149,15 +151,46 @@ int gl_renderer_init(GLRenderer *renderer, ANativeWindow *window, int width, int
     return 0;
 }
 
+static float ver[8];
+
 static void set_shader_value(GLRenderer *renderer)
 {
     glUseProgram(renderer->program);
-    static float ver[] = {
-            1.0f, -1.0f,
-            -1.0f, -1.0f,
-            1.0f, 1.0f,
-            -1.0f, 1.0f
-    };
+    float scale_width = 1.0f;
+    float scale_height = 1.0f;
+    if (renderer->video_width > 0 && renderer->video_height > 0) {
+        float render_ratio = renderer->window_width * 1.0 / renderer->window_height;
+        float video_ratio = renderer->video_width * 1.0 / renderer->video_height;
+        if (video_ratio > render_ratio) {
+            scale_height = render_ratio / video_ratio;
+            scale_width = 1.0f;
+        } else {
+            scale_width = video_ratio / render_ratio;
+            scale_height = 1.0f;
+        }
+    }
+//    static float ver[] = {
+//        scale_width, -scale_height,
+//        -scale_width, -scale_height,
+//        scale_width, scale_height,
+//        -scale_width, scale_height
+//    };
+
+//    ver[0] = {
+//            1.0f, -1.0f,
+//            -1.0f, -1.0f,
+//            1.0f, 1.0f,
+//            -1.0f, 1.0f
+//    };
+    ver[0] = scale_width;
+    ver[1] = -scale_height;
+    ver[2] = -scale_width;
+    ver[3] = -scale_height;
+    ver[4] = scale_width;
+    ver[5] = scale_height;
+    ver[6] = -scale_width;
+    ver[7] = scale_height;
+
     glEnableVertexAttribArray(renderer->position_handle);
     glVertexAttribPointer(renderer->position_handle, 2, GL_FLOAT, GL_FALSE, 0, ver);
     LOGI("%s, position_handle is %d", __func__ , renderer->position_handle);
@@ -186,7 +219,11 @@ int gl_renderer_render(GLRenderer *renderer, unsigned char **buffer, int video_w
     glViewport(0, 0, renderer->window_width, renderer->window_height);
     glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    set_shader_value(renderer);
+    if (renderer->video_width != video_width || renderer->video_height != video_height) {
+        renderer->video_width = video_width;
+        renderer->video_height = video_height;
+        set_shader_value(renderer);
+    }
     glActiveTexture(GL_TEXTURE0);
     bind_texture(renderer->textures[0], video_width, video_height, buffer[0]);
     glActiveTexture(GL_TEXTURE1);

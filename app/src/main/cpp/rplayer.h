@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <libavutil/avutil.h>
 #include <android/native_window_jni.h>
 #include "video_split.h"
 #include "video_convert_yuv.h"

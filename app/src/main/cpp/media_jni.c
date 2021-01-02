@@ -56,10 +56,8 @@ static jint JNI_split_video_to_yuv(JNIEnv *env, jclass class, jstring input_file
     int ret = 0;
     char *input_file_str = (*env)->GetStringUTFChars(env, input_file, 0);
     char *output_dir_str = (*env)->GetStringUTFChars(env, output_dir, 0);
-    int width = 0;
-    int height = 0;
-    int duration = 0;
-    ret = convert_to_yuv420(input_file_str, output_dir_str, &width, &height, &duration);
+    VideoInfo video_info;
+    ret = convert_to_yuv420(input_file_str, output_dir_str, &video_info);
     (*env)->ReleaseStringUTFChars(env, input_file, input_file_str);
     (*env)->ReleaseStringUTFChars(env, output_dir, output_dir_str);
     return ret;

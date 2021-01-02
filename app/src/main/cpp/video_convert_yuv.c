@@ -10,7 +10,7 @@ int write_yuv420_to_file(FILE *file, int width, int height, AVFrame *frame)
     if(!file || !frame) {
         return -1;
     }
-    LOGI("Write a frame to yuv file %dx%d frame %dx%d", width, height, frame->width, frame->height);
+//    LOGI("Write a frame to yuv file %dx%d frame %dx%d", width, height, frame->width, frame->height);
     fwrite(frame->data[0],1, width * height,   file);     //Y
     fwrite(frame->data[1],1, width * height / 4, file);  //U
     fwrite(frame->data[2],1, width * height / 4, file);  //V
@@ -18,7 +18,7 @@ int write_yuv420_to_file(FILE *file, int width, int height, AVFrame *frame)
 //    fwrite(frame->data[0], 1, y_size, file);
 //    fwrite(frame->data[1], 1, y_size / 4, file);
 //    fwrite(frame->data[2], 1, y_size / 4, file);
-    LOGI("Write a frame to yuv file 1");
+//    LOGI("Write a frame to yuv file 1");
     return 0;
 }
 
@@ -26,12 +26,12 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
 {
     int ret;
     ret = avcodec_send_packet(decode_ctx, pkt);
-    LOGI("avcodec_send_packet %d", ret);
+//    LOGI("avcodec_send_packet %d", ret);
     if (ret < 0) {
         return -1;
     }
     ret = avcodec_receive_frame(decode_ctx, frame);
-    LOGI("avcodec_receive_frame %d", ret);
+//    LOGI("avcodec_receive_frame %d", ret);
     if ((ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)) {
         return 0;
     }
@@ -42,9 +42,7 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
     return 1;
 }
 
-int convert_to_yuv420(const char *input_file, const char *output_file,
-        int *frame_width, int *frame_height,
-        int64_t *duration)
+int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo *info)
 {
     LOGI("video split to yuv start");
     int video_index = -1;
@@ -87,9 +85,10 @@ int convert_to_yuv420(const char *input_file, const char *output_file,
         return -1;
     }
     AVStream  *video_stream = ic->streams[video_index];
-    *frame_width = video_stream->codecpar->width;
-    *frame_height = video_stream->codecpar->height;
-    *duration = video_stream->duration;
+    info->video_width = video_stream->codecpar->width;
+    info->video_height = video_stream->codecpar->height;
+    info->duration = video_stream->duration;
+    info->frame_rate = video_stream->avg_frame_rate;
     decode = avcodec_find_decoder(video_stream->codecpar->codec_id);
     if (decode == NULL) {
         avformat_close_input(&ic);
@@ -163,7 +162,6 @@ int convert_to_yuv420(const char *input_file, const char *output_file,
     if (frame) {
         av_frame_free(&frame);
     }
-    LOGI("split yuv done");
     if (decode_ctx) {
         avcodec_close(decode_ctx);
         avcodec_free_context(&decode_ctx);

@@ -47,6 +47,7 @@ static void video_work_thread(void *arg)
     int i = 0;
     int video_count;
     RPlayer *rp = (RPlayer *)arg;
+
     // 将MP4拆分
     LOGI("split video[%s] into %s start", rp->path, rp->temp_dir);
     video_count = split_video(rp->path, rp->temp_dir);
@@ -57,10 +58,9 @@ static void video_work_thread(void *arg)
     }
     rp->segment_count = video_count;
     segment_queue_init(&rp->yuv_segment_q);
-    int frame_width = 0, frame_height = 0, frame_count = 0;
-    int64_t duration = 0;
+    int frame_count = 0;
     LOGI("start to convet yuv file");
-    for (i = video_count - 1; i >= video_count - 3; i--) {
+    for (i = video_count - 1; i >= 0; i--) {
         if (rp->abort_request)
             break;
         char mp4_file_path[1024] = {'\0'};
@@ -68,13 +68,16 @@ static void video_work_thread(void *arg)
 
         char yuv_file_path[1024] = {'\0'};
         sprintf(yuv_file_path, "%s/%s_%d.yuv", rp->temp_dir, TEMP_FILE_NAME, i);
-
-        LOGI("convert %s to %s start", mp4_file_path, yuv_file_path);
-        frame_count = convert_to_yuv420(mp4_file_path, yuv_file_path, &frame_width, &frame_height, &duration);
+        VideoInfo info;
+//        LOGI("convert %s to %s start", mp4_file_path, yuv_file_path);
+        frame_count = convert_to_yuv420(mp4_file_path, yuv_file_path, &info);
         LOGI("convert %s to %s end frame count is %d", mp4_file_path, yuv_file_path, frame_count);
         if (frame_count <= 0)
             continue;
-        segment_queue_put(&rp->yuv_segment_q, yuv_file_path, frame_width, frame_height, frame_count, duration);
+        LOGI("frame rate %d %d", info.frame_rate.num, info.frame_rate.den);
+        int64_t frame_show_time_ms = 1000 / (info.frame_rate.num / info.frame_rate.den);
+        segment_queue_put(&rp->yuv_segment_q, yuv_file_path, info.video_width,
+                          info.video_height, frame_count, info.duration, frame_show_time_ms);
     }
 }
 
@@ -98,7 +101,7 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
     file_size = ftell(file);
     int64_t frame_count = file_size / frame_size;
     int frame_index = 0;
-    LOGI("a frame size is %ld, file_size is %ld, frame count %d", frame_size, file_size, frame_count);
+    LOGI("a frame size is %ld, file_size is %ld, frame count %d, frame show time %ld", frame_size, file_size, frame_count, segment->frame_show_time_ms);
     do {
         if (rp->abort_request) {
             LOGE("has abort exit render thread");
@@ -111,13 +114,13 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
         frame_index++;
         long seek_offset = -frame_index * frame_size;
         ret = fseek(file, seek_offset, SEEK_END);
-        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
+//        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
         read_size = fread(buffer[0], 1, ysize,file); // y
-        LOGI("read y data size %d", read_size);
+//        LOGI("read y data size %d", read_size);
         read_size = fread(buffer[1], 1, ysize / 4, file); // u
-        LOGI("read u data size %d", read_size);
+//        LOGI("read u data size %d", read_size);
         fread(buffer[2], 1, ysize / 4 , file); // v
-        LOGI("read v data size %d", read_size);
+//        LOGI("read v data size %d", read_size);
         ret = gl_renderer_render(&rp->renderer, buffer, segment->width, segment->height);
         if (ret < 0) {
             LOGE("gl render failed...");
@@ -126,7 +129,7 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
             LOGE("read file end");
             break;
         }
-        usleep(40 * 1000);
+        usleep(segment->frame_show_time_ms * 1000);
     } while (frame_index < frame_count);
     fclose(file);
 }

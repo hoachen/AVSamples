@@ -24,7 +24,7 @@ int segment_queue_abort(SegmentQueue *q)
     pthread_mutex_unlock(&q->mutex);
 }
 
-int segment_queue_put_l(SegmentQueue *q, char *yuv_path, int width, int height, int frames, int64_t duration)
+int segment_queue_put_l(SegmentQueue *q, char *yuv_path, int width, int height, int frames, int64_t duration, int64_t frame_show_time)
 {
     if (q->abort_request)
         return -1;
@@ -39,6 +39,7 @@ int segment_queue_put_l(SegmentQueue *q, char *yuv_path, int width, int height, 
     segment->height = height;
     segment->frames = frames;
     segment->duration = duration;
+    segment->frame_show_time_ms = frame_show_time;
     segment->next = NULL;
     if (q->tail) {
         q->tail->next = segment;
@@ -55,11 +56,11 @@ int segment_queue_put_l(SegmentQueue *q, char *yuv_path, int width, int height, 
     return 0;
 }
 
-int segment_queue_put(SegmentQueue *q, char *yuv_path, int width, int height, int frames, int64_t duration)
+int segment_queue_put(SegmentQueue *q, char *yuv_path, int width, int height, int frames, int64_t duration, int64_t frame_show_time_ms)
 {
     int ret = 0;
     pthread_mutex_lock(&q->mutex);
-    ret = segment_queue_put_l(q, yuv_path, width, height, frames, duration);
+    ret = segment_queue_put_l(q, yuv_path, width, height, frames, duration, frame_show_time_ms);
     pthread_mutex_unlock(&q->mutex);
     return ret;
 }

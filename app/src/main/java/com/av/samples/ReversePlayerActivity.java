@@ -3,10 +3,12 @@ package com.av.samples;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -23,6 +25,8 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
     private SurfaceView mSurfaceView;
     private String mVideoPath;
     private String mVideoTempDir;
+    private Handler mHandler;
+    private Button mStartBtn;
 
     public static void startActivity(Context context, String videoPath, String videoTempDir) {
         Intent intent = new Intent(context, ReversePlayerActivity.class);
@@ -47,6 +51,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         mVideoPath = intent.getStringExtra(KEY_VIDEO_PATH);
         mVideoTempDir = intent.getStringExtra(KEY_TEMP_DIR);
         mPlayer = new ReversePlayer();
+        mHandler = new Handler();
     }
 
     public void startPlayerYuv() {

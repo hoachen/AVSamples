@@ -10,7 +10,7 @@
     <Button
         android:id="@+id/btn_start"
         android:layout_width="match_parent"
-        android:text="start play yuv file"
+        android:text="Reverse Video"
         android:layout_height="60dp"/>
 
     <SurfaceView

@@ -10,9 +10,15 @@
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 
+typedef struct VideoInfo {
+    int64_t *duration;
+    int video_width;
+    int video_height;
+    AVRational frame_rate;
+} VideoInfo;
 
-int convert_to_yuv420(const char *input_file, const char *output_file,
-        int *video_width, int *video_height, int64_t *duration);
+
+int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo *info);
 
 
 #endif //AVSAMPLES_VIDEO_CONVERT_YUV_H

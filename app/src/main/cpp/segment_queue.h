@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <string.h>
+#include <libavutil/avutil.h>
 #include "log.h"
 
 typedef struct YUVSegment
@@ -18,6 +19,7 @@ typedef struct YUVSegment
     int width;
     int height;
     int frames;
+    int64_t frame_show_time_ms;
     int64_t duration;
     struct YUVSegment *next;
 } YUVSegment;
@@ -37,7 +39,7 @@ int segment_queue_init(SegmentQueue *q);
 
 int segment_queue_abort(SegmentQueue *q);
 
-int segment_queue_put(SegmentQueue *q, char *yuv_path, int width, int height, int nb_frames, int64_t duration);
+int segment_queue_put(SegmentQueue *q, char *yuv_path, int width, int height, int nb_frames, int64_t duration, int64_t frame_show_time);
 
 int segment_queue_get(SegmentQueue *q, YUVSegment *segment, int block);
 

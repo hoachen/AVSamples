@@ -52,6 +52,8 @@ static const char *FRAGMENT_SHADER = GET_STR(
 typedef struct GLRenderer {
     int window_width;
     int window_height;
+    int video_width;
+    int video_height;
     EGLContext eglContext;
     EGLDisplay eglDisplay;
     EGLSurface eglSurface;
