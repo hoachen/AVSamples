@@ -61,7 +61,7 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
         LOGE("open file %s failed..", output_file);
         return -1;
     }
-    LOGI("start split video %s to %s", input_file, output_file);
+    LOGI("start convert mp4 %s to %s", input_file, output_file);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
         LOGI("open input format failed %s", av_err2str(ret));
@@ -125,7 +125,7 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
 
     while ((ret = av_read_frame(ic, &pkt)) >= 0) {
         if (pkt.stream_index == video_index) {
-            LOGI("to decoder video");
+//            LOGI("to decoder video");
             got_frame = decoder_video(decode_ctx, &pkt, frame);
             if (got_frame < 0) {
                 LOGI("decoder failed");
@@ -134,7 +134,7 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
                 av_packet_unref(&pkt);
                 continue;
             }
-            LOGI("to decoder video %d", got_frame);
+//            LOGI("to decoder video %d", got_frame);
             if (got_frame == 1) {
 //                sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
 //                          frame_yuv->data, frame_yuv->linesize);
@@ -143,16 +143,12 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
             }
         }
         av_packet_unref(&pkt);
-        if (frame_count >= 250) {
-            LOGI("has write frame %d", frame_count);
-            break;
-        }
 
     }
     avcodec_flush_buffers(decode_ctx);
     got_frame = avcodec_receive_frame(decode_ctx, frame);
     if (got_frame == 0) {
-        LOGI("avcodec_flush_buffers frame");
+//        LOGI("avcodec_flush_buffers frame");
         frame_count++;
 //        sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
 //                  frame_yuv->data, frame_yuv->linesize);
@@ -171,6 +167,6 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
         avformat_close_input(&ic);
     if (file)
         fclose(file);
-    LOGI("video split to yuv done");
+    LOGI("video convert to yuv %s done", output_file);
     return frame_count;
 }

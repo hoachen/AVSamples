@@ -81,6 +81,7 @@ static void video_work_thread(void *arg)
     }
 }
 
+static int first_render = 0;
 
 static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
 {
@@ -107,7 +108,10 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
             LOGE("has abort exit render thread");
             break;
         }
-        LOGI("start to render a frame");
+        if (!first_render) {
+            LOGI("start to render first frame");
+            first_render = 1;
+        }
         // 读取yuv数据
         int ret = 0;
         size_t read_size = 0;
@@ -151,6 +155,7 @@ static void video_render_thread(void *arg)
         if (rp->abort_request)
             break;
         got_segment = segment_queue_get(&rp->yuv_segment_q, &segment, 1);
+        LOGI("CHHH start render yuv");
         if (got_segment) {
             reverse_render_yuv(rp, &segment);
             render_count++;

@@ -9,6 +9,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -55,6 +56,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
     }
 
     public void startPlayerYuv() {
+        Toast.makeText(this, "开始倒序播放", Toast.LENGTH_SHORT).show();
         Log.i(TAG, " startPlayerYuv");
         mPlayer.init(mSurfaceView.getHolder().getSurface(), mSurfaceView.getWidth(), mSurfaceView.getHeight());
         mPlayer.setDataSource(mVideoPath, mVideoTempDir);
