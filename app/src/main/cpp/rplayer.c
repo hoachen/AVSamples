@@ -219,6 +219,7 @@ int rplayer_stop(RPlayer *player)
 {
     pthread_mutex_lock(&player->mutex);
     player->abort_request = 1;
+    segment_queue_abort(&player->yuv_segment_q);
     pthread_mutex_unlock(&player->mutex);
 }
 

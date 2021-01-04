@@ -105,7 +105,7 @@ static int init_egl_context(GLRenderer *renderer, ANativeWindow *window)
     return 0;
 }
 
-static void bind_texture(GLint textureId, int width, int height, const void *pixels)
+static void update_texture(GLint textureId, int width, int height, const void *pixels)
 {
     //绑定纹理
     glBindTexture(GL_TEXTURE_2D, textureId);
@@ -128,6 +128,7 @@ static int init_program_handle(GLRenderer *renderer)
 {
     LOGI("%s, program is %d", __func__ , renderer->program);
     glUseProgram(renderer->program);
+
     renderer->position_handle = glGetAttribLocation(renderer->program, "aPosition");
 
     renderer->textCoord_handle = glGetAttribLocation(renderer->program, "aTextCoord");
@@ -153,7 +154,7 @@ int gl_renderer_init(GLRenderer *renderer, ANativeWindow *window, int width, int
 
 static float ver[8];
 
-static void set_shader_value(GLRenderer *renderer)
+static void reset_vertex_data(GLRenderer *renderer)
 {
     glUseProgram(renderer->program);
     float scale_width = 1.0f;
@@ -222,14 +223,14 @@ int gl_renderer_render(GLRenderer *renderer, unsigned char **buffer, int video_w
     if (renderer->video_width != video_width || renderer->video_height != video_height) {
         renderer->video_width = video_width;
         renderer->video_height = video_height;
-        set_shader_value(renderer);
+        reset_vertex_data(renderer);
     }
     glActiveTexture(GL_TEXTURE0);
-    bind_texture(renderer->textures[0], video_width, video_height, buffer[0]);
+    update_texture(renderer->textures[0], video_width, video_height, buffer[0]);
     glActiveTexture(GL_TEXTURE1);
-    bind_texture(renderer->textures[1], video_width / 2, video_height / 2, buffer[1]);
+    update_texture(renderer->textures[1], video_width / 2, video_height / 2, buffer[1]);
     glActiveTexture(GL_TEXTURE2);
-    bind_texture(renderer->textures[2], video_width / 2, video_height / 2, buffer[2]);
+    update_texture(renderer->textures[2], video_width / 2, video_height / 2, buffer[2]);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     eglSwapBuffers(renderer->eglDisplay, renderer->eglSurface);
     return 0;
