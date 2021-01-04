@@ -124,8 +124,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void reversePlayVideo() {
         final String path = getExternalFilesDir("") + "/";
-        String video_path = path + "new_video2.mp4";
-        String tempDir = path + "reverse_video";
+        String video_path = path + "new_video3.mp4";
+        String tempDir = path + "reverse_video3";
         File file = new File(tempDir);
         file.deleteOnExit();
         if (!file.exists()) {

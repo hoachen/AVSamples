@@ -57,11 +57,10 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
 
     public void startPlayerYuv() {
         Toast.makeText(this, "开始倒序播放", Toast.LENGTH_SHORT).show();
-        Log.i(TAG, " startPlayerYuv");
+        Log.i(TAG, " start Reverse video");
         mPlayer.init(mSurfaceView.getHolder().getSurface(), mSurfaceView.getWidth(), mSurfaceView.getHeight());
         mPlayer.setDataSource(mVideoPath, mVideoTempDir);
         mPlayer.prepare();
-        Log.i(TAG, " player.prepare() end");
         mPlayer.start();
     }
 
@@ -84,7 +83,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
 
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder surfaceHolder, int format, int width, int height) {
-        Log.i(TAG, " player.prepare() url: " + mVideoPath);
+//        Log.i(TAG, " player.prepare() url: " + mVideoPath);
 
     }
 

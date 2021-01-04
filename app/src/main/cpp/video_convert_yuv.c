@@ -61,7 +61,7 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
         LOGE("open file %s failed..", output_file);
         return -1;
     }
-    LOGI("start convert mp4 %s to %s", input_file, output_file);
+    LOGI("start convert video %s to %s", input_file, output_file);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
         LOGI("open input format failed %s", av_err2str(ret));
@@ -167,6 +167,6 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
         avformat_close_input(&ic);
     if (file)
         fclose(file);
-    LOGI("video convert to yuv %s done", output_file);
+    LOGI("convert video %s to %s done", input_file, output_file);
     return frame_count;
 }

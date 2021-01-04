@@ -133,6 +133,7 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
             LOGE("read file end");
             break;
         }
+        LOGI("sleep time %ld us", segment->frame_show_time_ms * 1000)
         usleep(segment->frame_show_time_ms * 1000);
     } while (frame_index < frame_count);
     fclose(file);
@@ -176,8 +177,8 @@ static int rplayer_prepare_l(RPlayer *player)
 {
     LOGI("%s start", __func__);
     // 开启一个解封装线程
-    // 开启一个视频渲染线程
     pthread_create(&player->video_work_th, NULL, video_work_thread, player);
+    // 开启一个视频渲染线程
     pthread_create(&player->video_render_th, NULL, video_render_thread, player);
     LOGI("%s end", __func__ );
 }
