@@ -113,7 +113,7 @@ int split_video(const char *input_file, const char *output_dir)
                 last_dts = pkt.dts;
             }
             int64_t pts = pkt.pts - last_pts;
-            int64_t dts = pkt.dts - last_dts;
+            int64_t dts = pkt.dts - last_pts;
             ret = write_item_packet(oc, in_stream, out_stream, &pkt, pts, dts);
 //            if (ret < 0)
 //                break;

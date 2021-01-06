@@ -24,7 +24,8 @@ file(GLOB media-source media_jni.c log.h
         video_convert_yuv.c
         gl_renderer.c
         yuv_player.c
-        segment_queue.c)
+        segment_queue.c
+        message_queue.c)
 
 add_library(media SHARED ${media-source})
 

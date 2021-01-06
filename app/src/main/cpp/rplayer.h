@@ -14,6 +14,7 @@
 #include "video_convert_yuv.h"
 #include "gl_renderer.h"
 #include "segment_queue.h"
+#include "message_queue.h"
 
 typedef struct RPlayer {
     pthread_mutex_t mutex;
@@ -23,17 +24,20 @@ typedef struct RPlayer {
     ANativeWindow *window;
     int window_width;
     int window_height;
+    pthread_t msg_loop_th;
     pthread_t video_work_th;
     pthread_t video_render_th;
     int segment_count;
     GLRenderer renderer;
     SegmentQueue yuv_segment_q;
+    int (* msg_loop)(void *);
+    MessageQueue msg_q;
     int abort_request;
     int start;
 } RPlayer;
 
 
-int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height);
+int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height, int (*msg_loop)(void*));
 
 int rplayer_set_data_source(RPlayer *player, const char *path, const char *temp_dir);
 

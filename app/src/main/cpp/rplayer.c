@@ -8,11 +8,13 @@ static void video_work_thread(void *arg);
 
 static void video_render_thread(void *arg);
 
-int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height)
+int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height, int(*msg_loop)(void*))
 {
     LOGI("%s start", __func__ );
     pthread_mutex_init(&player->mutex, NULL);
     pthread_cond_init(&player->cond, NULL);
+    player->msg_loop = msg_loop;
+    msg_queue_init(&player->msg_q);
     player->window = window;
     player->window_width = window_width;
     player->window_height = window_height;
@@ -172,10 +174,18 @@ static void video_render_thread(void *arg)
 
 }
 
+static void message_loop_thread(void *arg)
+{
+    RPlayer *rp = (RPlayer *)arg;
+    rp->msg_loop(rp);
+}
+
 
 static int rplayer_prepare_l(RPlayer *player)
 {
     LOGI("%s start", __func__);
+    msg_queue_start(&player->msg_q);
+    pthread_create(&player->msg_loop_th, NULL, message_loop_thread, player);
     // 开启一个解封装线程
     pthread_create(&player->video_work_th, NULL, video_work_thread, player);
     // 开启一个视频渲染线程

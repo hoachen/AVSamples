@@ -75,7 +75,10 @@ static jlong JNI_rplayer_create(JNIEnv *env, jclass class)
     return (intptr_t)player;
 }
 
+static int msg_loop_n(void *arg)
+{
 
+}
 
 static jint JNI_rplayer_init(JNIEnv *env, jclass class, jlong handle, jobject surface,
         jint window_width, jint window_height)
@@ -83,7 +86,7 @@ static jint JNI_rplayer_init(JNIEnv *env, jclass class, jlong handle, jobject su
     int ret = 0;
     RPlayer *player = (RPlayer *)handle;
     ANativeWindow  *window = ANativeWindow_fromSurface(env, surface);
-    ret = rplayer_init(player, window, window_width, window_height);
+    ret = rplayer_init(player, window, window_width, window_height, msg_loop_n);
     return ret;
 }
 
