@@ -15,6 +15,7 @@
 #include "gl_renderer.h"
 #include "segment_queue.h"
 #include "message_queue.h"
+#include "constant.h"
 
 typedef struct RPlayer {
     pthread_mutex_t mutex;
@@ -31,13 +32,22 @@ typedef struct RPlayer {
     GLRenderer renderer;
     SegmentQueue yuv_segment_q;
     int (* msg_loop)(void *);
+    void *weak_thiz;
     MessageQueue msg_q;
     int abort_request;
     int start;
 } RPlayer;
 
 
-int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height, int (*msg_loop)(void*));
+RPlayer *rplayer_create(int (*msg_loop)(void*));
+
+void * rplayer_set_week_thiz(RPlayer *rp, void *week_obj);
+
+void *rplayer_get_week_thiz(RPlayer *rp);
+
+int rplayer_get_msg(RPlayer *rp, AVMessage *msg, int block);
+
+int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height);
 
 int rplayer_set_data_source(RPlayer *player, const char *path, const char *temp_dir);
 

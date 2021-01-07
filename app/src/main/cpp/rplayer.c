@@ -8,12 +8,50 @@ static void video_work_thread(void *arg);
 
 static void video_render_thread(void *arg);
 
-int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height, int(*msg_loop)(void*))
+static void rp_notify_simple1(RPlayer *rp, int what)
+{
+    LOGI("send a msg to msg queue what=%d", what);
+    msg_queue_put_simple1(&rp->msg_q, what);
+}
+
+
+RPlayer *rplayer_create(int(*msg_loop)(void*))
+{
+    RPlayer *rp = (RPlayer *)malloc(sizeof(RPlayer));
+    memset(rp, 0, sizeof(RPlayer));
+    rp->msg_loop = msg_loop;
+    return rp;
+}
+
+void *rplayer_set_week_thiz(RPlayer *rp, void *weak_thiz)
+{
+    void *week_thiz_pre = rp->weak_thiz;
+    rp->weak_thiz = weak_thiz;
+    return week_thiz_pre;
+}
+
+void *rplayer_get_week_thiz(RPlayer *rp)
+{
+    return rp->weak_thiz;
+}
+
+int rplayer_get_msg(RPlayer *rp, AVMessage *msg, int block)
+{
+    while(1) {
+        int ret = msg_queue_get(&rp->msg_q, msg, block);
+        LOGI("%s, get msg from msg queue, ret = %d", __func__ , ret);
+        if (ret < 0)
+            return ret;
+        return ret;
+    }
+    return -1;
+}
+
+int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int window_height)
 {
     LOGI("%s start", __func__ );
     pthread_mutex_init(&player->mutex, NULL);
     pthread_cond_init(&player->cond, NULL);
-    player->msg_loop = msg_loop;
     msg_queue_init(&player->msg_q);
     player->window = window;
     player->window_width = window_width;
@@ -62,6 +100,7 @@ static void video_work_thread(void *arg)
     segment_queue_init(&rp->yuv_segment_q);
     int frame_count = 0;
     LOGI("start to convet yuv file");
+    rp_notify_simple1(rp, MSG_PREPARED);
     for (i = video_count - 1; i >= 0; i--) {
         if (rp->abort_request)
             break;
@@ -185,6 +224,7 @@ static int rplayer_prepare_l(RPlayer *player)
 {
     LOGI("%s start", __func__);
     msg_queue_start(&player->msg_q);
+
     pthread_create(&player->msg_loop_th, NULL, message_loop_thread, player);
     // 开启一个解封装线程
     pthread_create(&player->video_work_th, NULL, video_work_thread, player);

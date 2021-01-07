@@ -1,13 +1,19 @@
 package com.av.samples;
 
+import android.util.Log;
 import android.view.Surface;
 
+import java.lang.ref.WeakReference;
+
+
 public class ReversePlayer {
+
+    private static final String TAG = "ReversePlayer";
 
     private long mNativeHandler;
 
     public ReversePlayer() {
-        mNativeHandler = _create();
+        mNativeHandler = _create(new WeakReference<>(this));
     }
 
     public void init(Surface surface, int windowWidth, int windowHeight) {
@@ -35,7 +41,7 @@ public class ReversePlayer {
         _release(mNativeHandler);
     }
 
-    private native long _create();
+    private native long _create(WeakReference<ReversePlayer> weekRef);
 
     private native int _init(long handle, Surface surface, int windowWidth, int windowHeight);
 
@@ -51,5 +57,15 @@ public class ReversePlayer {
 
     private native int _release(long handler);
 
+    private static void postEventFromNative(Object weakThiz,
+                                            int what, int arg1, int arg2, Object obj) {
+        Log.i(TAG, "postEventFromNative what=" + what);
+        if (weakThiz == null) {
+            return;
+        }
+        ReversePlayer rp = (ReversePlayer) ((WeakReference) weakThiz).get();
+        if (rp != null) {
 
+        }
+    }
 }
