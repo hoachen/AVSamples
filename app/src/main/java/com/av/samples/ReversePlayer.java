@@ -1,19 +1,31 @@
 package com.av.samples;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.Surface;
 
 import java.lang.ref.WeakReference;
+
+import androidx.annotation.NonNull;
 
 
 public class ReversePlayer {
 
     private static final String TAG = "ReversePlayer";
 
+    private static final int WHAT_PREPARED = 101;
+    private static final int WHAT_COMPLETE = 102;
+    private static final int WHAT_VIDEO_SIZE_CHANGED = 103;
+
     private long mNativeHandler;
+    private EventHandler mEventHandler;
 
     public ReversePlayer() {
         mNativeHandler = _create(new WeakReference<>(this));
+        Looper looper = (Looper.myLooper() != null) ? Looper.myLooper() : Looper.getMainLooper();
+        mEventHandler = new EventHandler(looper);
     }
 
     public void init(Surface surface, int windowWidth, int windowHeight) {
@@ -59,13 +71,39 @@ public class ReversePlayer {
 
     private static void postEventFromNative(Object weakThiz,
                                             int what, int arg1, int arg2, Object obj) {
-        Log.i(TAG, "postEventFromNative what=" + what);
+        Log.i(TAG, "receive a msg from native what=" + what + "thread = " + Thread.currentThread());
         if (weakThiz == null) {
             return;
         }
         ReversePlayer rp = (ReversePlayer) ((WeakReference) weakThiz).get();
-        if (rp != null) {
+        if (rp != null && rp.mEventHandler != null) {
+            rp.mEventHandler.obtainMessage(what, arg1, arg2, obj).sendToTarget();
+        }
+    }
 
+    private class EventHandler extends Handler {
+
+        public EventHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            Log.i(TAG, "EventHandler receive a msg what=" + msg.what + "thread = " + Thread.currentThread());
+            switch (msg.what) {
+                case WHAT_PREPARED:
+                    Log.i(TAG, "on video prepared");
+                    break;
+                case WHAT_COMPLETE:
+                    Log.i(TAG, "on video complete");
+                    break;
+                case WHAT_VIDEO_SIZE_CHANGED:
+                    int width = msg.arg1;
+                    int height = msg.arg2;
+                    Log.i(TAG, "onVideoSizeChanged video=(" + width + "x" + height + ")");
+                    break;
+            }
         }
     }
 }

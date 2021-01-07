@@ -15,7 +15,7 @@
 #include "gl_renderer.h"
 #include "segment_queue.h"
 #include "message_queue.h"
-#include "constant.h"
+#include "msg_def.h"
 
 typedef struct RPlayer {
     pthread_mutex_t mutex;
@@ -23,6 +23,9 @@ typedef struct RPlayer {
     const char *path;
     const char *temp_dir;
     ANativeWindow *window;
+    int video_width;
+    int video_height;
+    int prepared;
     int window_width;
     int window_height;
     pthread_t msg_loop_th;

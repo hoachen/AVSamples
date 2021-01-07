@@ -66,7 +66,7 @@ static int close_write_item(AVFormatContext **oc)
     return 0;
 }
 
-int split_video(const char *input_file, const char *output_dir)
+int split_video_by_gop(const char *input_file, const char *output_dir)
 {
     int video_index = -1;
     int ret = 0, i = 0;

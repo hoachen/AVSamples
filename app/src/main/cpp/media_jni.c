@@ -13,7 +13,6 @@
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
 #endif
 
-#define MAIN_CLASS  "com/av/samples/MainActivity"
 #define VIDEO_SPLIT_CLASS "com/av/samples/demux/VideoSplit"
 #define YUV_PLAYER_CLASS "com/av/samples/YUVPlayer"
 #define REVERSE_PLAYER_CLASS "com/av/samples/ReversePlayer"
@@ -24,34 +23,13 @@ static pthread_once_t g_key_once = PTHREAD_ONCE_INIT;
 static jclass g_rplayer_class;
 static jmethodID g_method_postEventFromNative;
 
-// 静态注册
-//JNIEXPORT jstring JNICALL
-//Java_com_av_samples_MainActivity_stringFromJNI(JNIEnv *env, jobject thiz) {
-//    // TODO: implement stringFromJNI()
-//    char *hello = "Hello World From C";
-//    LOGI("%s", hello);
-//    return (*env)->NewStringUTF(env, hello);
-//}
 
-
-static jstring JNI_string_helloworld(JNIEnv *env, jclass class)
-{
-    char *hello = "hello world";
-    LOGI("%s", hello);
-    return (*env)->NewStringUTF(env, hello);
-}
-
-static JNINativeMethod main_methods[] = {
-        {"stringFromJNI", "()Ljava/lang/String;", JNI_string_helloworld}
-};
-
-//
 static jint JNI_split_video(JNIEnv *env, jclass class, jstring input_file, jstring output_dir)
 {
     int ret = 0;
     char *input_file_str = (*env)->GetStringUTFChars(env, input_file, 0);
     char *output_dir_str = (*env)->GetStringUTFChars(env, output_dir, 0);
-    ret = split_video(input_file_str, output_dir_str);
+    ret = split_video_by_gop(input_file_str, output_dir_str);
     (*env)->ReleaseStringUTFChars(env, input_file, input_file_str);
     (*env)->ReleaseStringUTFChars(env, output_dir, output_dir_str);
     return ret;
@@ -144,6 +122,9 @@ static int message_loop_n(JNIEnv *env, RPlayer *rp)
         if (ret > 0) {
             switch (msg.what) {
                 case MSG_PREPARED:
+                case MSG_VIDEO_SIZE_CHANGED:
+                case MSG_COMPLETE:
+                case MSG_ERROR:
                     post_event(env, week_thiz, msg.what, msg.arg1, msg.arg2);
                     break;
             }
@@ -324,9 +305,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
         return JNI_ERR;
     }
     g_jvm = vm;
-    jclass main_class = (*env)->FindClass(env, MAIN_CLASS);
-    (*env)->RegisterNatives(env, main_class, main_methods, NELEM(main_methods));
-    (*env)->DeleteLocalRef(env, main_class);
 
     jclass video_split_class = (*env)->FindClass(env, VIDEO_SPLIT_CLASS);
     (*env)->RegisterNatives(env, video_split_class, video_split_methods, NELEM(video_split_methods));
@@ -338,12 +316,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
 
     jclass rplayer_class = (*env)->FindClass(env, REVERSE_PLAYER_CLASS);
     g_rplayer_class = (*env)->NewGlobalRef(env, rplayer_class);
-//    g_rplayer_class = rplayer_class;
     const char *method_name = "postEventFromNative";
     const char *sign = "(Ljava/lang/Object;IIILjava/lang/Object;)V";
     g_method_postEventFromNative = (*env)->GetStaticMethodID(env, rplayer_class, method_name, sign);
     if (g_method_postEventFromNative == NULL) {
-        LOGE("g_postEventFromNative_method_id is null");
+        LOGE("g_method_postEventFromNative is null");
     }
     (*env)->RegisterNatives(env, rplayer_class, rplayer_jni_methods, NELEM(rplayer_jni_methods));
     (*env)->DeleteLocalRef(env, rplayer_class);

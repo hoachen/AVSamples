@@ -16,6 +16,6 @@
  * @param output_dir
  * @return 切出文件的个数
  */
-int split_video(const char *input_file, const char *output_dir);
+int split_video_by_gop(const char *input_file, const char *output_dir);
 
 #endif //AVSAMPLES_VIDEO_SPLIT_H

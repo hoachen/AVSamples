@@ -41,16 +41,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }, throwable -> {
 
                 });
-
     }
 
-
-
-    /**
-     * A native method that is implemented by the 'native-lib' native library,
-     * which is packaged with this application.
-     */
-    public native String stringFromJNI();
 
     @Override
     public void onClick(View view) {
@@ -124,8 +116,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void reversePlayVideo() {
         final String path = getExternalFilesDir("") + "/";
-        String video_path = path + "new_video3.mp4";
-        String tempDir = path + "reverse_video3";
+        String video_path = path + "uaJ9p480p.mp4";
+        String tempDir = path + "reverse_video";
         File file = new File(tempDir);
         file.deleteOnExit();
         if (!file.exists()) {

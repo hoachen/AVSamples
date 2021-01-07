@@ -8,10 +8,24 @@ static void video_work_thread(void *arg);
 
 static void video_render_thread(void *arg);
 
-static void rp_notify_simple1(RPlayer *rp, int what)
+static void notify_simple1(RPlayer *rp, int what)
 {
-    LOGI("send a msg to msg queue what=%d", what);
     msg_queue_put_simple1(&rp->msg_q, what);
+}
+
+static void notify_simple2(RPlayer *rp, int what, int arg1)
+{
+    msg_queue_put_simple2(&rp->msg_q, what, arg1);
+}
+
+static void notify_simple3(RPlayer *rp, int what, int arg1, int arg2)
+{
+    msg_queue_put_simple3(&rp->msg_q, what, arg1, arg2);
+}
+
+static void rp_remove_msg(RPlayer *rp, int what)
+{
+    msg_queue_remove(&rp->msg_q, what);
 }
 
 
@@ -90,7 +104,7 @@ static void video_work_thread(void *arg)
 
     // 将MP4拆分
     LOGI("split video[%s] into %s start", rp->path, rp->temp_dir);
-    video_count = split_video(rp->path, rp->temp_dir);
+    video_count = split_video_by_gop(rp->path, rp->temp_dir);
     LOGI("split video[%s] into %s complete, video_count is %d", rp->path, rp->temp_dir, video_count);
     if (video_count <= 0) {
         LOGE("split video failed exit work thread", rp->path, rp->temp_dir);
@@ -100,7 +114,7 @@ static void video_work_thread(void *arg)
     segment_queue_init(&rp->yuv_segment_q);
     int frame_count = 0;
     LOGI("start to convet yuv file");
-    rp_notify_simple1(rp, MSG_PREPARED);
+
     for (i = video_count - 1; i >= 0; i--) {
         if (rp->abort_request)
             break;
@@ -115,6 +129,17 @@ static void video_work_thread(void *arg)
         LOGI("convert %s to %s end frame count is %d", mp4_file_path, yuv_file_path, frame_count);
         if (frame_count <= 0)
             continue;
+        // 解码出来了第一个gop 回调
+        if (!rp->prepared) {
+            rp->prepared = 1;
+            notify_simple1(rp, MSG_PREPARED);
+        }
+        if (rp->video_width != info.video_width || rp->video_height != info.video_height) {
+            rp->video_width = info.video_width;
+            rp->video_height = info.video_height;
+            notify_simple3(rp, MSG_VIDEO_SIZE_CHANGED, rp->video_width, rp->video_height);
+        }
+
         LOGI("frame rate %d %d", info.frame_rate.num, info.frame_rate.den);
         int64_t frame_show_time_ms = 1000 / (info.frame_rate.num / info.frame_rate.den);
         segment_queue_put(&rp->yuv_segment_q, yuv_file_path, info.video_width,
@@ -207,6 +232,7 @@ static void video_render_thread(void *arg)
         }
         LOGI("has render segment count %d", render_count);
         if (render_count >= rp->segment_count) {
+            notify_simple1(rp, MSG_COMPLETE);
             break;
         }
     }
@@ -270,6 +296,7 @@ int rplayer_stop(RPlayer *player)
     pthread_mutex_lock(&player->mutex);
     player->abort_request = 1;
     segment_queue_abort(&player->yuv_segment_q);
+    msg_queue_abort(&player->msg_q);
     pthread_mutex_unlock(&player->mutex);
 }
 

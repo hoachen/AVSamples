@@ -2,8 +2,8 @@
 // Created by chenhao on 1/6/21.
 //
 
-#ifndef AVSAMPLES_CONSTANT_H
-#define AVSAMPLES_CONSTANT_H
+#ifndef AVSAMPLES_MSG_DEF_H
+#define AVSAMPLES_MSG_DEF_H
 
 
 #define MSG_FLUSH 0
@@ -11,6 +11,7 @@
 #define MSG_ERROR    100
 #define MSG_PREPARED 101
 #define MSG_COMPLETE 102
+#define MSG_VIDEO_SIZE_CHANGED  103
 
 #define  PLAYER_STATE_IDLE  0        // The player does not have any media to play.
 #define  PLAYER_STATE_INITIALIZED  1      // The player sdk initialized
@@ -27,4 +28,4 @@
 
 
 
-#endif //AVSAMPLES_CONSTANT_H
+#endif //AVSAMPLES_MSG_DEF_H

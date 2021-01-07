@@ -3,7 +3,7 @@
 //
 
 #include "message_queue.h"
-#include "constant.h"
+#include "msg_def.h"
 
 int msg_queue_init(MessageQueue *q)
 {
