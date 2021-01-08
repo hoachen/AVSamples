@@ -8,54 +8,76 @@ static void video_work_thread(void *arg);
 
 static void video_render_thread(void *arg);
 
-static void notify_simple1(RPlayer *rp, int what)
+static void notify_simple1(RPlayer *player, int what)
 {
-    msg_queue_put_simple1(&rp->msg_q, what);
+    msg_queue_put_simple1(&player->msg_q, what);
 }
 
-static void notify_simple2(RPlayer *rp, int what, int arg1)
+static void notify_simple2(RPlayer *player, int what, int arg1)
 {
-    msg_queue_put_simple2(&rp->msg_q, what, arg1);
+    msg_queue_put_simple2(&player->msg_q, what, arg1);
 }
 
-static void notify_simple3(RPlayer *rp, int what, int arg1, int arg2)
+static void notify_simple3(RPlayer *player, int what, int arg1, int arg2)
 {
-    msg_queue_put_simple3(&rp->msg_q, what, arg1, arg2);
+    msg_queue_put_simple3(&player->msg_q, what, arg1, arg2);
 }
 
-static void rp_remove_msg(RPlayer *rp, int what)
+static void rplayer_remove_msg(RPlayer *player, int what)
 {
-    msg_queue_remove(&rp->msg_q, what);
+    msg_queue_remove(&player->msg_q, what);
+}
+
+static void rplayer_change_state_l(RPlayer *player, int state)
+{
+    player->state = state;
+    notify_simple2(player, MSG_PLAYER_STATE_CHANGED, player->state);
 }
 
 
 RPlayer *rplayer_create(int(*msg_loop)(void*))
 {
-    RPlayer *rp = (RPlayer *)malloc(sizeof(RPlayer));
-    memset(rp, 0, sizeof(RPlayer));
-    rp->msg_loop = msg_loop;
-    return rp;
+    RPlayer *player = (RPlayer *)malloc(sizeof(RPlayer));
+    memset(player, 0, sizeof(RPlayer));
+    player->msg_loop = msg_loop;
+    return player;
 }
 
-void *rplayer_set_week_thiz(RPlayer *rp, void *weak_thiz)
+void *rplayer_set_week_thiz(RPlayer *player, void *weak_thiz)
 {
-    void *week_thiz_pre = rp->weak_thiz;
-    rp->weak_thiz = weak_thiz;
+    void *week_thiz_pre = player->weak_thiz;
+    player->weak_thiz = weak_thiz;
     return week_thiz_pre;
 }
 
-void *rplayer_get_week_thiz(RPlayer *rp)
+void *rplayer_get_week_thiz(RPlayer *player)
 {
-    return rp->weak_thiz;
+    return player->weak_thiz;
 }
 
-int rplayer_get_msg(RPlayer *rp, AVMessage *msg, int block)
+int rplayer_get_msg(RPlayer *player, AVMessage *msg, int block)
 {
     while(1) {
-        int ret = msg_queue_get(&rp->msg_q, msg, block);
+        int ret = msg_queue_get(&player->msg_q, msg, block);
         LOGI("%s, get msg from msg queue, ret = %d", __func__ , ret);
         if (ret < 0)
             return ret;
+        switch (msg->what) {
+            case MSG_PREPARED:
+                pthread_mutex_lock(&player->mutex);
+                if (player->state == MP_STATE_ASYNC_PREPARING) {
+                    rplayer_change_state_l(player, MP_STATE_PREPARED);
+                } else {
+                    LOGD("MSG_PREPARED: expecting mp_state==MP_STATE_ASYNC_PREPARING\n");
+                }
+                pthread_mutex_unlock(&player->mutex);
+                break;
+            case MSG_COMPLETE:
+                pthread_mutex_lock(&player->mutex);
+                rplayer_change_state_l(player, MP_STATE_COMPLETED);
+                pthread_mutex_unlock(&player->mutex);
+                break;
+        }
         return ret;
     }
     return -1;
@@ -71,7 +93,7 @@ int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int w
     player->window_width = window_width;
     player->window_height = window_height;
     player->abort_request = 0;
-    player->start = 0;
+    player->pause_req = 1;
     player->segment_count = 0;
     LOGI("%s end", __func__ );
 }
@@ -82,6 +104,7 @@ int rplayer_set_data_source(RPlayer *player, const char *path, const char *temp_
     pthread_mutex_lock(&player->mutex);
     player->path = av_strdup(path);
     player->temp_dir = av_strdup(temp_dir);
+    rplayer_change_state_l(player, MP_STATE_INITIALIZED);
     pthread_mutex_unlock(&player->mutex);
     LOGI("%s end", __func__ );
     return 0;
@@ -99,30 +122,31 @@ static void video_work_thread(void *arg)
 {
     LOGI("video work thread started...");
     int i = 0;
-    int video_count;
-    RPlayer *rp = (RPlayer *)arg;
+    int retval;
+    RPlayer *player = (RPlayer *)arg;
 
     // 将MP4拆分
-    LOGI("split video[%s] into %s start", rp->path, rp->temp_dir);
-    video_count = split_video_by_gop(rp->path, rp->temp_dir);
-    LOGI("split video[%s] into %s complete, video_count is %d", rp->path, rp->temp_dir, video_count);
-    if (video_count <= 0) {
-        LOGE("split video failed exit work thread", rp->path, rp->temp_dir);
+    LOGI("split video[%s] into %s start", player->path, player->temp_dir);
+    retval = split_video_by_gop(player->path, player->temp_dir);
+    LOGI("split video[%s] into %s complete, video_count is %d", player->path, player->temp_dir, retval);
+    if (retval <= 0) {
+        LOGE("split video failed exit work thread", player->path, player->temp_dir);
+        notify_simple2(player, MSG_ERROR, retval);
         return;
     }
-    rp->segment_count = video_count;
-    segment_queue_init(&rp->yuv_segment_q);
+    player->segment_count = retval;
+    segment_queue_init(&player->yuv_segment_q);
     int frame_count = 0;
     LOGI("start to convet yuv file");
 
-    for (i = video_count - 1; i >= 0; i--) {
-        if (rp->abort_request)
+    for (i = retval - 1; i >= 0; i--) {
+        if (player->abort_request)
             break;
         char mp4_file_path[1024] = {'\0'};
-        sprintf(mp4_file_path, "%s/%s_%d.mp4", rp->temp_dir, TEMP_FILE_NAME, i);
+        sprintf(mp4_file_path, "%s/%s_%d.mp4", player->temp_dir, TEMP_FILE_NAME, i);
 
         char yuv_file_path[1024] = {'\0'};
-        sprintf(yuv_file_path, "%s/%s_%d.yuv", rp->temp_dir, TEMP_FILE_NAME, i);
+        sprintf(yuv_file_path, "%s/%s_%d.yuv", player->temp_dir, TEMP_FILE_NAME, i);
         VideoInfo info;
 //        LOGI("convert %s to %s start", mp4_file_path, yuv_file_path);
         frame_count = convert_to_yuv420(mp4_file_path, yuv_file_path, &info);
@@ -130,26 +154,24 @@ static void video_work_thread(void *arg)
         if (frame_count <= 0)
             continue;
         // 解码出来了第一个gop 回调
-        if (!rp->prepared) {
-            rp->prepared = 1;
-            notify_simple1(rp, MSG_PREPARED);
+        if (!player->prepared) {
+            player->prepared = 1;
+            notify_simple1(player, MSG_PREPARED);
         }
-        if (rp->video_width != info.video_width || rp->video_height != info.video_height) {
-            rp->video_width = info.video_width;
-            rp->video_height = info.video_height;
-            notify_simple3(rp, MSG_VIDEO_SIZE_CHANGED, rp->video_width, rp->video_height);
+        if (player->video_width != info.video_width || player->video_height != info.video_height) {
+            player->video_width = info.video_width;
+            player->video_height = info.video_height;
+            notify_simple3(player, MSG_VIDEO_SIZE_CHANGED, player->video_width, player->video_height);
         }
-
         LOGI("frame rate %d %d", info.frame_rate.num, info.frame_rate.den);
         int64_t frame_show_time_ms = 1000 / (info.frame_rate.num / info.frame_rate.den);
-        segment_queue_put(&rp->yuv_segment_q, yuv_file_path, info.video_width,
+        segment_queue_put(&player->yuv_segment_q, yuv_file_path, info.video_width,
                           info.video_height, frame_count, info.duration, frame_show_time_ms);
     }
+    LOGE("work thread exit");
 }
 
-static int first_render = 0;
-
-static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
+static void reverse_render_yuv(RPlayer *player, YUVSegment *segment)
 {
     FILE *file = NULL;
     file = fopen(segment->path, "rb");
@@ -170,13 +192,19 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
     int frame_index = 0;
     LOGI("a frame size is %ld, file_size is %ld, frame count %d, frame show time %ld", frame_size, file_size, frame_count, segment->frame_show_time_ms);
     do {
-        if (rp->abort_request) {
-            LOGE("has abort exit render thread");
+        if (player->abort_request) {
+            LOGE("abort exit render thread");
             break;
         }
-        if (!first_render) {
+        if (player->pause_req) {
+            LOGE("pause wait start");
+            usleep(20);
+            continue;
+        }
+        if (!player->first_frame_rendered) {
             LOGI("start to render first frame");
-            first_render = 1;
+            notify_simple1(player, MSG_RENDER_FIRST_FRAME);
+            player->first_frame_rendered = 1;
         }
         // 读取yuv数据
         int ret = 0;
@@ -184,16 +212,14 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
         frame_index++;
         long seek_offset = -frame_index * frame_size;
         ret = fseek(file, seek_offset, SEEK_END);
-//        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
+        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
         read_size = fread(buffer[0], 1, ysize,file); // y
-//        LOGI("read y data size %d", read_size);
         read_size = fread(buffer[1], 1, ysize / 4, file); // u
-//        LOGI("read u data size %d", read_size);
         fread(buffer[2], 1, ysize / 4 , file); // v
-//        LOGI("read v data size %d", read_size);
-        ret = gl_renderer_render(&rp->renderer, buffer, segment->width, segment->height);
+        ret = gl_renderer_render(&player->renderer, buffer, segment->width, segment->height);
         if (ret < 0) {
             LOGE("gl render failed...");
+            break;
         }
         if (feof(file) || read_size < 0) {
             LOGE("read file end");
@@ -213,55 +239,56 @@ static void reverse_render_yuv(RPlayer *rp, YUVSegment *segment)
 static void video_render_thread(void *arg)
 {
     LOGI("yuv render thread started");
-    RPlayer *rp = (RPlayer *)arg;
-    gl_renderer_init(&rp->renderer, rp->window, rp->window_width, rp->window_height);
+    RPlayer *player = (RPlayer *)arg;
+    gl_renderer_init(&player->renderer, player->window, player->window_width, player->window_height);
     YUVSegment segment;
     int got_segment = 0;
     int render_count = 0;
     for (;;) {
-        if (rp->abort_request)
+        if (player->abort_request)
             break;
-        got_segment = segment_queue_get(&rp->yuv_segment_q, &segment, 1);
+        got_segment = segment_queue_get(&player->yuv_segment_q, &segment, 1);
         LOGI("CHHH start render yuv");
         if (got_segment) {
-            reverse_render_yuv(rp, &segment);
+            reverse_render_yuv(player, &segment);
             render_count++;
         } else if (got_segment < 0) {
             LOGE("get segment from queue failed...");
             break;
         }
         LOGI("has render segment count %d", render_count);
-        if (render_count >= rp->segment_count) {
-            notify_simple1(rp, MSG_COMPLETE);
+        if (render_count >= player->segment_count) {
+            notify_simple1(player, MSG_COMPLETE);
             break;
         }
     }
-
+    LOGI("video render thread exit");
 }
 
 static void message_loop_thread(void *arg)
 {
-    RPlayer *rp = (RPlayer *)arg;
-    rp->msg_loop(rp);
+    RPlayer *player = (RPlayer *)arg;
+    player->msg_loop(player);
+    LOGI("msg loop thread exit...");
 }
 
 
 static int rplayer_prepare_l(RPlayer *player)
 {
-    LOGI("%s start", __func__);
+    LOGI("%s", __func__);
+    rplayer_change_state_l(player, MP_STATE_ASYNC_PREPARING);
     msg_queue_start(&player->msg_q);
-
     pthread_create(&player->msg_loop_th, NULL, message_loop_thread, player);
     // 开启一个解封装线程
     pthread_create(&player->video_work_th, NULL, video_work_thread, player);
     // 开启一个视频渲染线程
     pthread_create(&player->video_render_th, NULL, video_render_thread, player);
-    LOGI("%s end", __func__ );
 }
 
 
 int rplayer_prepare(RPlayer *player)
 {
+    LOGI("%s", __func__ );
     pthread_mutex_lock(&player->mutex);
     rplayer_prepare_l(player);
     pthread_mutex_unlock(&player->mutex);
@@ -271,28 +298,29 @@ int rplayer_start(RPlayer *player)
 {
     LOGI("%s start", __func__ );
     pthread_mutex_lock(&player->mutex);
-    player->start = 1;
+    player->pause_req = 0;
     pthread_cond_signal(&player->cond);
     pthread_mutex_unlock(&player->mutex);
-    LOGI("%s end", __func__ );
 }
 
 
 int rplayer_seek(RPlayer *player, int64_t pos)
 {
-
+    LOGI("%s", __func__ );
 }
 
 int rplayer_pause(RPlayer *player)
 {
+    LOGI("%s", __func__ );
     pthread_mutex_lock(&player->mutex);
-    player->start = 0;
+    player->pause_req = 0;
     pthread_cond_signal(&player->cond);
     pthread_mutex_unlock(&player->mutex);
 }
 
 int rplayer_stop(RPlayer *player)
 {
+    LOGI("%s", __func__ );
     pthread_mutex_lock(&player->mutex);
     player->abort_request = 1;
     segment_queue_abort(&player->yuv_segment_q);
@@ -302,6 +330,9 @@ int rplayer_stop(RPlayer *player)
 
 int rplayer_release(RPlayer *player)
 {
+    LOGI("%s", __func__ );
+    pthread_join(player->msg_loop_th, NULL);
+    msg_queue_destroy(&player->msg_q);
     pthread_join(player->video_work_th, NULL);
     segment_queue_destroy(&player->yuv_segment_q);
     pthread_join(player->video_render_th, NULL);

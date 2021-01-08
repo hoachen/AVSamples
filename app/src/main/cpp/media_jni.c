@@ -57,7 +57,7 @@ static void JNI_thread_destroyed(void* value)
 {
     JNIEnv *env = (JNIEnv*) value;
     if (env != NULL) {
-        LOGE("%s: [%d] didn't call SDL_JNI_DetachThreadEnv() explicity\n", __func__, (int)gettid());
+//        LOGE("%s: [%d] didn't call SDL_JNI_DetachThreadEnv() explicity\n", __func__, (int)gettid());
         (*g_jvm)->DetachCurrentThread(g_jvm);
         pthread_setspecific(g_thread_key, NULL);
     }
@@ -125,6 +125,8 @@ static int message_loop_n(JNIEnv *env, RPlayer *rp)
                 case MSG_VIDEO_SIZE_CHANGED:
                 case MSG_COMPLETE:
                 case MSG_ERROR:
+                case MSG_RENDER_FIRST_FRAME:
+                case MSG_PLAYER_STATE_CHANGED:
                     post_event(env, week_thiz, msg.what, msg.arg1, msg.arg2);
                     break;
             }
@@ -136,7 +138,6 @@ static int message_loop_n(JNIEnv *env, RPlayer *rp)
 
 static int message_loop(void *arg)
 {
-    LOGI("messge loop start");
     JNIEnv *env = NULL;
     if (JNI_OK != JNI_setup_thread_env(&env)) {
         LOGE("%s: JNI_setup_thread_env failed\n", __func__);
@@ -144,7 +145,6 @@ static int message_loop(void *arg)
     }
     RPlayer *rp = (RPlayer *) arg;
     message_loop_n(env, rp);
-    LOGI("messge loop end");
     return 0;
 }
 

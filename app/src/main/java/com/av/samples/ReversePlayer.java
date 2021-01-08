@@ -15,17 +15,25 @@ public class ReversePlayer {
 
     private static final String TAG = "ReversePlayer";
 
+    private static final int WHAT_ERROR = 100;
     private static final int WHAT_PREPARED = 101;
     private static final int WHAT_COMPLETE = 102;
     private static final int WHAT_VIDEO_SIZE_CHANGED = 103;
+    private static final int WHAT_RENDER_FIRST_FRAME = 104;
+    private static final int WHAT_PLAYER_STATE_CHANGED = 105;
 
     private long mNativeHandler;
     private EventHandler mEventHandler;
+    private Listener mListener;
 
     public ReversePlayer() {
         mNativeHandler = _create(new WeakReference<>(this));
         Looper looper = (Looper.myLooper() != null) ? Looper.myLooper() : Looper.getMainLooper();
         mEventHandler = new EventHandler(looper);
+    }
+
+    public void setListener(Listener listener) {
+        this.mListener = listener;
     }
 
     public void init(Surface surface, int windowWidth, int windowHeight) {
@@ -98,12 +106,41 @@ public class ReversePlayer {
                 case WHAT_COMPLETE:
                     Log.i(TAG, "on video complete");
                     break;
+                case WHAT_ERROR:
+                    int errorCode = msg.arg1;
+                    Log.i(TAG, "error :" + errorCode);
+                    if (mListener != null) {
+                        mListener.onError(errorCode);
+                    }
+                    break;
                 case WHAT_VIDEO_SIZE_CHANGED:
                     int width = msg.arg1;
                     int height = msg.arg2;
                     Log.i(TAG, "onVideoSizeChanged video=(" + width + "x" + height + ")");
+                    if (mListener != null) {
+                        mListener.onVideoSizeChanged(width, height);
+                    }
+                case WHAT_RENDER_FIRST_FRAME:
+
+                    break;
+                case WHAT_PLAYER_STATE_CHANGED:
+                    int state = msg.arg1;
+                    if (mListener != null) {
+                        mListener.onPlayerStateChanged(state);
+                    }
                     break;
             }
         }
+    }
+
+    interface Listener {
+
+        void onPlayerStateChanged(int state);
+
+        void onVideoSizeChanged(int width, int height);
+
+        void onError(int errorCode);
+
+        void onProgressUpdated(long pos);
     }
 }
