@@ -283,30 +283,37 @@ static int rplayer_prepare_l(RPlayer *player)
     pthread_create(&player->video_work_th, NULL, video_work_thread, player);
     // 开启一个视频渲染线程
     pthread_create(&player->video_render_th, NULL, video_render_thread, player);
+    return 0;
 }
 
 
 int rplayer_prepare(RPlayer *player)
 {
     LOGI("%s", __func__ );
+    int ret;
     pthread_mutex_lock(&player->mutex);
-    rplayer_prepare_l(player);
+    ret = rplayer_prepare_l(player);
     pthread_mutex_unlock(&player->mutex);
+    return ret;
 }
 
 int rplayer_start(RPlayer *player)
 {
     LOGI("%s start", __func__ );
     pthread_mutex_lock(&player->mutex);
+    if (player->state != MP_STATE_PREPARED)
+        return -1;
     player->pause_req = 0;
     pthread_cond_signal(&player->cond);
     pthread_mutex_unlock(&player->mutex);
+    return 0;
 }
 
 
 int rplayer_seek(RPlayer *player, int64_t pos)
 {
     LOGI("%s", __func__ );
+
 }
 
 int rplayer_pause(RPlayer *player)
