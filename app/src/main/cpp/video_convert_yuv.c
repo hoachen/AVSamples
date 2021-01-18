@@ -38,11 +38,11 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
     if (ret < 0) {
         return -1;
     }
-    LOGI("avcodec_receive_frame 1 ")
+//    LOGI("avcodec_receive_frame 1 ")
     return 1;
 }
 
-int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo *info)
+int convert_to_yuv420(const char *input_file, const char *output_file)
 {
     LOGI("video split to yuv start");
     int video_index = -1;
@@ -85,10 +85,6 @@ int convert_to_yuv420(const char *input_file, const char *output_file, VideoInfo
         return -1;
     }
     AVStream  *video_stream = ic->streams[video_index];
-    info->video_width = video_stream->codecpar->width;
-    info->video_height = video_stream->codecpar->height;
-    info->duration = video_stream->duration;
-    info->frame_rate = video_stream->avg_frame_rate;
     decode = avcodec_find_decoder(video_stream->codecpar->codec_id);
     if (decode == NULL) {
         avformat_close_input(&ic);

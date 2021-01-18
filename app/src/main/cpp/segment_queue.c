@@ -4,16 +4,19 @@
 
 #include "segment_queue.h"
 
-int segment_queue_init(SegmentQueue *q)
+int segment_queue_init(SegmentQueue *q, int size)
 {
     pthread_mutex_init(&q->mutex, NULL);
     pthread_cond_init(&q->cond, NULL);
-    q->head = NULL;
-    q->tail = NULL;
-    q->duration = 0;
-    q->frame_count = 0;
-    q->size = 0;
+    q->segments = (GopSegment *)av_mallocz(size * sizeof(GopSegment));
+    if (!q->segments) {
+        return -1;
+    }
+    q->rindex = 0;
+    q->windex = 0;
+    q->size = size;
     q->abort_request = 0;
+    return 0;
 }
 
 int segment_queue_abort(SegmentQueue *q)
@@ -24,101 +27,55 @@ int segment_queue_abort(SegmentQueue *q)
     pthread_mutex_unlock(&q->mutex);
 }
 
-int segment_queue_put_l(SegmentQueue *q, char *yuv_path, int width, int height, int frames, int64_t duration, int64_t frame_show_time)
-{
-    if (q->abort_request)
-        return -1;
-    YUVSegment *segment = (YUVSegment *)malloc(sizeof(YUVSegment));
-    if (!segment) {
-        LOGE("malloc YUVSegment failed");
-        return -1;
-    }
-    memset(segment, 0, sizeof(YUVSegment));
-    segment->path = strdup(yuv_path);
-    segment->width = width;
-    segment->height = height;
-    segment->frames = frames;
-    segment->duration = duration;
-    segment->frame_show_time_ms = frame_show_time;
-    segment->next = NULL;
-    if (q->tail) {
-        q->tail->next = segment;
-    }
-    q->tail = segment;
-    if (!q->head) {
-        q->head = q->tail;
-    }
-    q->duration += duration;
-    q->size ++;
-    q->frame_count += frames;
 
+void segment_queue_push(SegmentQueue *q)
+{
+    pthread_mutex_lock(&q->mutex);
+    if (++q->windex >= q->size) {
+        q->windex = 0;
+    }
     pthread_cond_signal(&q->cond);
-    return 0;
-}
-
-int segment_queue_put(SegmentQueue *q, char *yuv_path, int width, int height, int frames, int64_t duration, int64_t frame_show_time_ms)
-{
-    int ret = 0;
-    pthread_mutex_lock(&q->mutex);
-    ret = segment_queue_put_l(q, yuv_path, width, height, frames, duration, frame_show_time_ms);
     pthread_mutex_unlock(&q->mutex);
-    return ret;
 }
 
-int segment_queue_get(SegmentQueue *q, YUVSegment *segment, int block)
+GopSegment *segment_queue_peek_writable(SegmentQueue *q)
 {
-    int ret;
-    YUVSegment *s1 = NULL;
+    GopSegment *segment;
     pthread_mutex_lock(&q->mutex);
-    for (;;) {
-        if (q->abort_request) {
-            ret = -1;
-            break;
-        }
-        if (q->head) {
-            s1 = q->head;
-            q->head = s1->next;
-            if (!q->head) {
-                q->tail = NULL;
-            }
-            ret = 1;
-            *segment = *s1;
-            q->size--;
-            q->duration -= segment->duration;
-            q->frame_count -= segment->frames;
-            // !! free();
-            free(s1);
-            break;
-        } else if (!block) {
-            ret = 0;
-            break;
-        } else {
-            pthread_cond_wait(&q->cond, &q->mutex);
-        }
+    if (q->abort_request)
+        return NULL;
+    segment = q->segments + q->windex;
+    pthread_mutex_unlock(&q->mutex);
+    return segment;
+}
+
+void segment_queue_next(SegmentQueue *q)
+{
+    pthread_mutex_lock(&q->mutex);
+    if (++q->rindex >= q->size) {
+        q->rindex = 0;
     }
     pthread_mutex_unlock(&q->mutex);
-    return ret;
 }
 
-int segment_queue_flush(SegmentQueue *q)
+GopSegment *segment_queue_peek_readable(SegmentQueue *q)
 {
-    YUVSegment *s1, *s2;
-    pthread_mutex_unlock(&q->mutex);
-    for (s1 = q->head; s1; s1 = s2) {
-        s2 = s1->next;
-        free(s1);
+    GopSegment *segment;
+    pthread_mutex_lock(&q->mutex);
+    segment = q->segments + q->rindex;
+    while (!segment->exist && !q->abort_request) {
+        pthread_cond_wait(&q->cond, &q->mutex);
     }
-    q->head = NULL;
-    q->tail = NULL;
-    q->frame_count = 0;
-    q->size = 0;
-    q->duration = 0;
     pthread_mutex_unlock(&q->mutex);
+    if (q->abort_request)
+        return NULL;
+    return segment;
 }
 
 int segment_queue_destroy(SegmentQueue *q)
 {
-    segment_queue_flush(q);
+    if (q->segments)
+        free(q->segments);
     pthread_cond_destroy(&q->cond);
     pthread_mutex_destroy(&q->mutex);
 }

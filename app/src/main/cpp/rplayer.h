@@ -29,7 +29,7 @@ typedef struct RPlayer {
     int window_height;
     int segment_count;
     GLRenderer renderer;
-    SegmentQueue yuv_segment_q;
+    SegmentQueue segment_q;
     int (* msg_loop)(void *);
     void *weak_thiz;
     MessageQueue msg_q;
