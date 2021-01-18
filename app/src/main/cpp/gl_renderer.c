@@ -212,7 +212,7 @@ static void reset_vertex_data(GLRenderer *renderer)
 
 int gl_renderer_render(GLRenderer *renderer, unsigned char **buffer, int video_width, int video_height)
 {
-    LOGI("%s frame %dx%d", __func__, video_width, video_height);
+//    LOGI("%s frame %dx%d", __func__, video_width, video_height);
     if (EGL_TRUE != eglMakeCurrent(renderer->eglDisplay, renderer->eglSurface, renderer->eglSurface, renderer->eglContext)) {
         LOGE("eglMakeCurrent failed");
         return -1;

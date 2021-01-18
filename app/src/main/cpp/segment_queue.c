@@ -79,3 +79,17 @@ int segment_queue_destroy(SegmentQueue *q)
     pthread_cond_destroy(&q->cond);
     pthread_mutex_destroy(&q->mutex);
 }
+
+void segment_queue_print(SegmentQueue *q)
+{
+    int i = 0;
+    if (!q->segments || q->size <= 0)
+        return;
+    for (i = 0; i < q->size; i++) {
+        Segment *segment = q->segments + i;
+        if (segment)
+            LOGI("Segment(index=%d, yuv_path=%s, start=%ld, duration=%ld, exist=%d)",
+                    segment->index, segment->yuv_path, segment->start_time,
+                    segment->duration, segment->exist);
+    }
+}

@@ -21,6 +21,7 @@ typedef struct Segment
     int height;
     int frames;
     int exist;
+    int index;
     int64_t start_time;
     int64_t frame_show_time_ms;
     int64_t duration;
@@ -54,5 +55,5 @@ int segment_queue_abort(SegmentQueue *q);
 
 int segment_queue_destroy(SegmentQueue *q);
 
-
+void segment_queue_print(SegmentQueue *q);
 #endif //AVSAMPLES_SEGMENT_QUEUE_H

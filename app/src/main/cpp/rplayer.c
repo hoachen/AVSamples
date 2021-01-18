@@ -158,10 +158,12 @@ static int init_segment_queue(RPlayer *player)
         segment->duration = fmt_ctx->duration;
         segment->exist = 0;
         segment->frames = 0;
+        segment->index = index;
         index++;
         start_time += segment->duration;
         avformat_close_input(&fmt_ctx);
     }
+    // segment_queue_print(&player->segment_q);
     return ret;
 }
 
@@ -265,11 +267,9 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment)
     file_size = ftell(file);
     int64_t frame_count = file_size / frame_size;
     int frame_index = 0;
-    if (file_size <= 0) {
-        return;
-    }
-    LOGI("a frame size is %ld, file_size is %ld, frame count %d, frame show time %ld", frame_size, file_size, frame_count, segment->frame_show_time_ms);
-    do {
+    LOGI("a gop segment yuv file count is %ld, file_size is %ld, "
+         "frame count %d, frame show time %ld", frame_size, file_size, frame_count, segment->frame_show_time_ms);
+    while(file_size > 0 && frame_index < frame_count) {
         if (player->abort_request) {
             LOGE("abort exit render thread");
             break;
@@ -290,10 +290,10 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment)
         frame_index++;
         long seek_offset = -frame_index * frame_size;
         ret = fseek(file, seek_offset, SEEK_END);
-        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
-        read_size = fread(buffer[0], 1, ysize,file); // y
-        read_size = fread(buffer[1], 1, ysize / 4, file); // u
-        fread(buffer[2], 1, ysize / 4 , file); // v
+//        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
+        read_size = fread(buffer[0], 1, ysize,file);  //  read y
+        fread(buffer[1], 1, ysize / 4, file);  //  read u
+        fread(buffer[2], 1, ysize / 4 , file); //  read v
         ret = gl_renderer_render(&player->renderer, buffer, segment->width, segment->height);
         if (ret < 0) {
             LOGE("gl render failed...");
@@ -305,7 +305,10 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment)
         }
         LOGI("sleep time %ld us", segment->frame_show_time_ms * 1000)
         usleep(segment->frame_show_time_ms * 1000);
-    } while (frame_index < frame_count);
+    };
+    free(buffer[0]);
+    free(buffer[1]);
+    free(buffer[2]);
     fclose(file);
 }
 
