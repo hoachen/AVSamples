@@ -42,7 +42,7 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
     return 1;
 }
 
-int convert_to_yuv420(const char *input_file, const char *output_file)
+int decode_to_yuv420(const char *input_file, const char *output_file)
 {
     LOGI("video split to yuv start");
     int video_index = -1;
@@ -61,7 +61,7 @@ int convert_to_yuv420(const char *input_file, const char *output_file)
         LOGE("open file %s failed..", output_file);
         return -1;
     }
-    LOGI("start convert video %s to %s", input_file, output_file);
+    LOGI("start decode video %s to %s", input_file, output_file);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
         LOGI("open input format failed %s", av_err2str(ret));
@@ -163,6 +163,6 @@ int convert_to_yuv420(const char *input_file, const char *output_file)
         avformat_close_input(&ic);
     if (file)
         fclose(file);
-    LOGI("convert video %s to %s done", input_file, output_file);
+    LOGI("decode video %s to %s done", input_file, output_file);
     return frame_count;
 }

@@ -10,7 +10,7 @@
 #include <libswscale/swscale.h>
 #include <libavutil/imgutils.h>
 
-int convert_to_yuv420(const char *input_file, const char *output_file);
+int decode_to_yuv420(const char *input_file, const char *output_file);
 
 
 #endif //AVSAMPLES_VIDEO_CONVERT_YUV_H

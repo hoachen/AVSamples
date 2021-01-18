@@ -8,7 +8,7 @@ int segment_queue_init(SegmentQueue *q, int size)
 {
     pthread_mutex_init(&q->mutex, NULL);
     pthread_cond_init(&q->cond, NULL);
-    q->segments = (GopSegment *)av_mallocz(size * sizeof(GopSegment));
+    q->segments = (Segment *)av_mallocz(size * sizeof(Segment));
     if (!q->segments) {
         return -1;
     }
@@ -38,9 +38,9 @@ void segment_queue_push(SegmentQueue *q)
     pthread_mutex_unlock(&q->mutex);
 }
 
-GopSegment *segment_queue_peek_writable(SegmentQueue *q)
+Segment *segment_queue_peek_writable(SegmentQueue *q)
 {
-    GopSegment *segment;
+    Segment *segment;
     pthread_mutex_lock(&q->mutex);
     if (q->abort_request)
         return NULL;
@@ -58,9 +58,9 @@ void segment_queue_next(SegmentQueue *q)
     pthread_mutex_unlock(&q->mutex);
 }
 
-GopSegment *segment_queue_peek_readable(SegmentQueue *q)
+Segment *segment_queue_peek_readable(SegmentQueue *q)
 {
-    GopSegment *segment;
+    Segment *segment;
     pthread_mutex_lock(&q->mutex);
     segment = q->segments + q->rindex;
     while (!segment->exist && !q->abort_request) {

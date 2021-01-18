@@ -13,7 +13,7 @@
 #include <libavutil/avutil.h>
 #include "log.h"
 
-typedef struct GopSegment
+typedef struct Segment
 {
     char mp4_path[1024];
     char yuv_path[1024];
@@ -24,12 +24,12 @@ typedef struct GopSegment
     int64_t start_time;
     int64_t frame_show_time_ms;
     int64_t duration;
-} GopSegment;
+} Segment;
 
 
 typedef struct SegmentQueue
 {
-    GopSegment *segments;
+    Segment *segments;
     int size;
     int rindex;
     int windex;
@@ -43,11 +43,11 @@ int segment_queue_init(SegmentQueue *q, int size);
 
 void segment_queue_push(SegmentQueue *q);
 
-GopSegment *segment_queue_peek_writable(SegmentQueue *q);
+Segment *segment_queue_peek_writable(SegmentQueue *q);
 
 void segment_queue_next(SegmentQueue *q);
 
-GopSegment *segment_queue_peek_readable(SegmentQueue *q);
+Segment *segment_queue_peek_readable(SegmentQueue *q);
 
 
 int segment_queue_abort(SegmentQueue *q);
