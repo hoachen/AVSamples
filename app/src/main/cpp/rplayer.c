@@ -57,6 +57,7 @@ void *rplayer_get_week_thiz(RPlayer *player)
 
 int rplayer_get_msg(RPlayer *player, AVMessage *msg, int block)
 {
+    LOGI("%s start", __func__ );
     while(1) {
         int ret = msg_queue_get(&player->msg_q, msg, block);
         LOGI("%s, get msg from msg queue, ret = %d", __func__ , ret);
@@ -163,7 +164,9 @@ static int init_segment_queue(RPlayer *player)
         start_time += segment->duration;
         avformat_close_input(&fmt_ctx);
     }
-    // segment_queue_print(&player->segment_q);
+    player->duration = start_time;
+//    LOGI("player total duration = %ld", player->duration);
+//     segment_queue_print(&player->segment_q);
     return ret;
 }
 
@@ -220,16 +223,17 @@ static void video_work_thread(void *arg)
             usleep(20);
             continue;
         } else {
-            LOGI("convert %s to %s start", segment->mp4_path, segment->yuv_path);
+//            LOGI("convert %s to %s start", segment->mp4_path, segment->yuv_path);
             frame_count = decode_to_yuv420(segment->mp4_path, segment->yuv_path);
-            LOGI("convert %s to %s end frame count is %d", segment->mp4_path, segment->yuv_path,
-                 frame_count);
-//            if (frame_count <= 0) {
-//                continue;
-//            }
+//            LOGI("convert %s to %s end frame count is %d", segment->mp4_path, segment->yuv_path,
+//                 frame_count);
             segment->frames = frame_count;
             segment->exist = 1;
-            segment_queue_push(&player->segment_q);
+            if (player->seek_req && segment->index != player->seek_index) {
+                continue;
+            } else {
+                segment_queue_push(&player->segment_q);
+            }
             // 解码出来了第一个gop 回调
             if (!player->prepared) {
                 player->prepared = 1;
@@ -247,8 +251,7 @@ static void video_work_thread(void *arg)
     LOGE("work thread exit");
 }
 
-static void reverse_render_yuv(RPlayer *player, Segment *segment)
-{
+static void reverse_render_yuv(RPlayer *player, Segment *segment) {
     LOGI("reverse_render_yuv %s", segment->yuv_path);
     FILE *file = NULL;
     file = fopen(segment->yuv_path, "rb");
@@ -258,18 +261,19 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment)
     }
     unsigned char *buffer[3];
     int32_t ysize = segment->width * segment->height;
-    buffer[0] = malloc( sizeof(unsigned char) * ysize); // y
+    buffer[0] = malloc(sizeof(unsigned char) * ysize); // y
     buffer[1] = malloc(sizeof(unsigned char) * ysize / 4); // u
     buffer[2] = malloc(sizeof(unsigned char) * ysize / 4); // v
-    int64_t frame_size = ysize  + ysize / 4 + ysize / 4;
+    int64_t frame_size = ysize + ysize / 4 + ysize / 4;
     size_t file_size = 0;
     fseek(file, 0, SEEK_END); // seek 到了末尾
     file_size = ftell(file);
     int64_t frame_count = file_size / frame_size;
     int frame_index = 0;
     LOGI("a gop segment yuv file count is %ld, file_size is %ld, "
-         "frame count %d, frame show time %ld", frame_size, file_size, frame_count, segment->frame_show_time_ms);
-    while(file_size > 0 && frame_index < frame_count) {
+         "frame count %d, frame show time %ld", frame_size, file_size, frame_count,
+         segment->frame_show_time_ms);
+    while (file_size > 0 && frame_index < frame_count) {
         if (player->abort_request) {
             LOGE("abort exit render thread");
             break;
@@ -279,33 +283,59 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment)
 //            usleep(20);
 //            continue;
 //        }
-        if (!player->first_frame_rendered) {
-            LOGI("start to render first frame");
-            notify_simple1(player, MSG_RENDER_FIRST_FRAME);
-            player->first_frame_rendered = 1;
+        if (player->seek_req && segment->index != player->seek_index) {
+            LOGI("has seek to need seek to index=%d, "
+                 "current index=%d", player->seek_index, segment->index);
+            break;
+        }
+        if (player->seek_req) {
+            frame_index = player->seek_frame_offset;
+        } else {
+            frame_index++;
         }
         // 读取yuv数据
         int ret = 0;
         size_t read_size = 0;
-        frame_index++;
         long seek_offset = -frame_index * frame_size;
         ret = fseek(file, seek_offset, SEEK_END);
 //        LOGI("seek result %d, seek offset %ld", ret, seek_offset);
-        read_size = fread(buffer[0], 1, ysize,file);  //  read y
+        read_size = fread(buffer[0], 1, ysize, file);  //  read y
         fread(buffer[1], 1, ysize / 4, file);  //  read u
-        fread(buffer[2], 1, ysize / 4 , file); //  read v
+        fread(buffer[2], 1, ysize / 4, file); //  read v
+        if (feof(file) || read_size < 0) {
+            LOGE("read file end");
+            break;
+        }
         ret = gl_renderer_render(&player->renderer, buffer, segment->width, segment->height);
         if (ret < 0) {
             LOGE("gl render failed...");
             break;
         }
-        if (feof(file) || read_size < 0) {
-            LOGE("read file end");
-            break;
+        int64_t current_pos =
+                segment->start_time / 1000 + frame_index * segment->frame_show_time_ms;
+        LOGI("current play pos %ld index=%d, frame_index = %d", current_pos, segment->index, frame_index);
+        if (segment->index >= player->segment_count) {
+            notify_simple1(player, MSG_COMPLETE);
+        }
+        if (!player->first_frame_rendered) {
+            LOGI("start to render first frame");
+            notify_simple1(player, MSG_RENDER_FIRST_FRAME);
+            player->first_frame_rendered = 1;
+        }
+        if (player->seek_req
+                && segment->index == player->seek_index
+                && frame_index == player->seek_frame_offset) {
+            LOGI("to toggle seek req");
+            pthread_mutex_lock(&player->mutex);
+            player->seek_req = 0;
+            player->seek_index = 0;
+            player->seek_frame_offset = 0;
+            pthread_mutex_unlock(&player->mutex);
+            segment_queue_complete(&player->segment_q);
         }
         LOGI("sleep time %ld us", segment->frame_show_time_ms * 1000)
         usleep(segment->frame_show_time_ms * 1000);
-    };
+    }
     free(buffer[0]);
     free(buffer[1]);
     free(buffer[2]);
@@ -333,13 +363,18 @@ static void video_render_thread(void *arg)
             break;
         }
         reverse_render_yuv(player, segment);
-        segment_queue_next(&player->segment_q);
+        if (player->seek_req && segment->index != player->seek_index) {
+            segment_queue_seek(&player->segment_q, player->seek_index);
+        } else {
+            segment_queue_next(&player->segment_q);
+        }
     }
     LOGI("video render thread exit");
 }
 
 static void message_loop_thread(void *arg)
 {
+    LOGI("msg loop thread start");
     RPlayer *player = (RPlayer *)arg;
     player->msg_loop(player);
     LOGI("msg loop thread exit...");
@@ -372,19 +407,46 @@ int rplayer_start(RPlayer *player)
 {
     LOGI("%s start", __func__ );
     pthread_mutex_lock(&player->mutex);
-    if (player->state != MP_STATE_PREPARED)
-        return -1;
+//    if (player->state != MP_STATE_PREPARED)
+//        return -1;
     player->pause_req = 0;
-    pthread_cond_signal(&player->cond);
+//    pthread_cond_signal(&player->cond);
     pthread_mutex_unlock(&player->mutex);
     return 0;
 }
 
-
-int rplayer_seek(RPlayer *player, int64_t pos)
+int rplayer_seek_l(RPlayer *player, int64_t posUs)
 {
-    LOGI("%s", __func__ );
+    LOGI("rplayer_seek_l");
+    if (!player->segment_q.segments) {
+        LOGE("rplayer_seek_l wait to init segment queue");
+        return -1;
+    }
+    int i;
+    for (i = 0; i < player->segment_q.size; i++) {
+        Segment *segment = player->segment_q.segments + i;
+        if (posUs >= segment->start_time &&
+            (posUs < segment->start_time + segment->duration)) {
+            player->seek_req = 1;
+            player->seek_index = i;
+            player->seek_frame_offset = (posUs - segment->start_time) / (segment->frame_show_time_ms * 1000);
+            LOGI("seek to segment index = %d, frame offset = %d", player->seek_index, player->seek_frame_offset)
+            break;
+        }
+    }
+}
 
+int rplayer_seek(RPlayer *player, int64_t posUs) // us
+{
+    int ret;
+    LOGI("rplayer_seek posUs %ld", posUs);
+    if (posUs < 0) {
+        return -1;
+    }
+    pthread_mutex_lock(&player->mutex);
+    ret = rplayer_seek_l(player, posUs);
+    pthread_mutex_unlock(&player->mutex);
+    return ret;
 }
 
 int rplayer_pause(RPlayer *player)
@@ -392,7 +454,7 @@ int rplayer_pause(RPlayer *player)
     LOGI("%s", __func__ );
     pthread_mutex_lock(&player->mutex);
     player->pause_req = 1;
-    pthread_cond_signal(&player->cond);
+//    pthread_cond_signal(&player->cond);
     pthread_mutex_unlock(&player->mutex);
 }
 

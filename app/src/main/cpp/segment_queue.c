@@ -12,6 +12,7 @@ int segment_queue_init(SegmentQueue *q, int size)
     if (!q->segments) {
         return -1;
     }
+    q->seek_req = 0;
     q->rindex = 0;
     q->windex = 0;
     q->size = size;
@@ -30,11 +31,15 @@ int segment_queue_abort(SegmentQueue *q)
 
 void segment_queue_push(SegmentQueue *q)
 {
+
     pthread_mutex_lock(&q->mutex);
-    if (++q->windex >= q->size) {
-        q->windex = 0;
+    if (!q->seek_req) {
+        if (++q->windex >= q->size) {
+            q->windex = 0;
+        }
+        LOGI("segment_queue_push to index %d", q->windex);
+        pthread_cond_signal(&q->cond);
     }
-    pthread_cond_signal(&q->cond);
     pthread_mutex_unlock(&q->mutex);
 }
 
@@ -52,9 +57,29 @@ Segment *segment_queue_peek_writable(SegmentQueue *q)
 void segment_queue_next(SegmentQueue *q)
 {
     pthread_mutex_lock(&q->mutex);
-    if (++q->rindex >= q->size) {
-        q->rindex = 0;
+    if (!q->seek_req) {
+        if (++q->rindex >= q->size) {
+            q->rindex = 0;
+        }
+        LOGI("segment_queue_next to index %d", q->rindex);
     }
+    pthread_mutex_unlock(&q->mutex);
+}
+
+void segment_queue_seek(SegmentQueue *q, int index)
+{
+    pthread_mutex_lock(&q->mutex);
+    q->seek_req = 1;
+    q->rindex = index;
+    q->windex = index;
+    LOGI("segment_queue_seek to index %d", index);
+    pthread_mutex_unlock(&q->mutex);
+}
+
+void segment_queue_complete(SegmentQueue *q)
+{
+    pthread_mutex_lock(&q->mutex);
+    q->seek_req = 0;
     pthread_mutex_unlock(&q->mutex);
 }
 
@@ -66,6 +91,7 @@ Segment *segment_queue_peek_readable(SegmentQueue *q)
     while (!segment->exist && !q->abort_request) {
         pthread_cond_wait(&q->cond, &q->mutex);
     }
+    LOGI("segment_queue_peek_readable to index %d", q->rindex);
     pthread_mutex_unlock(&q->mutex);
     if (q->abort_request)
         return NULL;

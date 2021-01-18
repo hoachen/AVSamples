@@ -34,7 +34,7 @@ static int start_write_item(AVFormatContext **oc, AVStream *in_stream, AVStream 
         }
     }
     ret = avformat_write_header(*oc, NULL);
-    LOGI("avformat_write_header end ret = %d", ret);
+//    LOGI("avformat_write_header end ret = %d", ret);
     return ret;
 }
 
@@ -76,7 +76,7 @@ int split_video_by_gop(const char *input_file, const char *output_dir)
     AVStream  *in_stream = NULL;
     AVStream  *out_stream = NULL;
     AVPacket pkt;
-    LOGI("start split video %s to %s", input_file, output_dir);
+//    LOGI("start split video %s to %s", input_file, output_dir);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
         LOGI("open input format failed %s", av_err2str(ret));

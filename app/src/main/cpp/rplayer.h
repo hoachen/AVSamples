@@ -22,19 +22,23 @@ typedef struct RPlayer {
     pthread_cond_t cond;
     const char *path;
     const char *temp_dir;
-    ANativeWindow *window;
-    int video_width;
-    int video_height;
-    int window_width;
-    int window_height;
+    ANativeWindow *window;    //
+    int video_width;          // video width
+    int video_height;         // video height
+    int window_width;         // display width
+    int window_height;        // display height
+    int64_t duration;         // video total duration
     int segment_count;
-    GLRenderer renderer;
-    SegmentQueue segment_q;
+    GLRenderer renderer;      // open gl render
+    SegmentQueue segment_q;   // gop segment queue
     int (* msg_loop)(void *);
     void *weak_thiz;
     MessageQueue msg_q;
     int abort_request;
     int pause_req;
+    int seek_req;
+    int seek_index;
+    int seek_frame_offset;          // found index and calculate offset
     int prepared;
     int first_frame_rendered;
     int state;

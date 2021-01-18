@@ -21,6 +21,7 @@ public class ReversePlayer {
     private static final int WHAT_VIDEO_SIZE_CHANGED = 103;
     private static final int WHAT_RENDER_FIRST_FRAME = 104;
     private static final int WHAT_PLAYER_STATE_CHANGED = 105;
+    private static final int WHAT_SEEK_COMPLETE = 106;
 
     private long mNativeHandler;
     private EventHandler mEventHandler;
@@ -48,6 +49,10 @@ public class ReversePlayer {
         _prepare(mNativeHandler);
     }
 
+    public void seekTo(long posMs) {
+        _seek(mNativeHandler, posMs * 1000);
+    }
+
     public void start() {
         _start(mNativeHandler);
     }
@@ -72,6 +77,8 @@ public class ReversePlayer {
     private native int _start(long handler);
 
     private native int _pause(long handler);
+
+    private native int _seek(long handler, long posUs);
 
     private native int _stop(long handler);
 
@@ -121,12 +128,17 @@ public class ReversePlayer {
                         mListener.onVideoSizeChanged(width, height);
                     }
                 case WHAT_RENDER_FIRST_FRAME:
-
                     break;
                 case WHAT_PLAYER_STATE_CHANGED:
                     int state = msg.arg1;
                     if (mListener != null) {
                         mListener.onPlayerStateChanged(state);
+                    }
+                    break;
+                case WHAT_SEEK_COMPLETE:
+                    if (mListener != null) {
+                        Log.i(TAG, "onSeekComplete");
+                        mListener.onSeekComplete();
                     }
                     break;
             }
@@ -139,8 +151,10 @@ public class ReversePlayer {
 
         void onVideoSizeChanged(int width, int height);
 
+        void onSeekComplete();
+
         void onError(int errorCode);
 
-        void onProgressUpdated(long pos);
+        void onProgressUpdated(long posMs, long durationMs);
     }
 }

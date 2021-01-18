@@ -35,6 +35,7 @@ typedef struct SegmentQueue
     int rindex;
     int windex;
     int64_t duration;
+    int seek_req;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
     int abort_request;
@@ -55,5 +56,10 @@ int segment_queue_abort(SegmentQueue *q);
 
 int segment_queue_destroy(SegmentQueue *q);
 
+void segment_queue_seek(SegmentQueue *q, int index);
+
+void segment_queue_complete(SegmentQueue *q);
+
 void segment_queue_print(SegmentQueue *q);
+
 #endif //AVSAMPLES_SEGMENT_QUEUE_H

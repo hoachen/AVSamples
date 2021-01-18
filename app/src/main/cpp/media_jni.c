@@ -198,6 +198,15 @@ static jint JNI_rplayer_start(JNIEnv *env, jclass class, jlong handler)
     return ret;
 }
 
+static jint JNI_rplayer_seek(JNIEnv *env, jclass class, jlong handler, jlong posUs)
+{
+    RPlayer *player = (RPlayer *)handler;
+    int ret = 0;
+    LOGI("JNI_rplayer_seek");
+    ret = rplayer_seek(player, posUs);
+    return ret;
+}
+
 
 static jint JNI_rplayer_pause(JNIEnv *env, jclass class, jlong handler)
 {
@@ -233,6 +242,7 @@ static JNINativeMethod rplayer_jni_methods[] = {
         {"_setDataSource", "(JLjava/lang/String;Ljava/lang/String;)I", JNI_rplayer_setDataSource},
         {"_start", "(J)I", JNI_rplayer_start},
         {"_pause", "(J)I", JNI_rplayer_pause},
+        {"_seek", "(JJ)I", JNI_rplayer_seek},
         {"_stop", "(J)I", JNI_rplayer_stop},
         {"_release", "(J)I", JNI_rplayer_release}
 };

@@ -14,7 +14,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-public class ReversePlayerActivity extends AppCompatActivity implements SurfaceHolder.Callback {
+public class ReversePlayerActivity extends AppCompatActivity implements SurfaceHolder.Callback, ReversePlayer.Listener {
 
 
     private static final String TAG = "ReversePlayerActivity";
@@ -52,6 +52,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         mVideoPath = intent.getStringExtra(KEY_VIDEO_PATH);
         mVideoTempDir = intent.getStringExtra(KEY_TEMP_DIR);
         mPlayer = new ReversePlayer();
+        mPlayer.setListener(this);
         mHandler = new Handler();
     }
 
@@ -62,6 +63,18 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         mPlayer.setDataSource(mVideoPath, mVideoTempDir);
         mPlayer.prepare();
         mPlayer.start();
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mPlayer.seekTo(10000);
+            }
+        }, 3000);
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mPlayer.seekTo(0);
+            }
+        }, 10000);
     }
 
     @Override
@@ -90,5 +103,30 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder surfaceHolder) {
 
+    }
+
+    @Override
+    public void onPlayerStateChanged(int state) {
+
+    }
+
+    @Override
+    public void onVideoSizeChanged(int width, int height) {
+        Log.i(TAG, "onVideoSizeChanged width=" + width + ",height=" + height);
+    }
+
+    @Override
+    public void onSeekComplete() {
+
+    }
+
+    @Override
+    public void onError(int errorCode) {
+
+    }
+
+    @Override
+    public void onProgressUpdated(long pos, long duration) {
+        Log.i(TAG, "onProgressUpdated pos=" + pos + ",duration=" + duration);
     }
 }
