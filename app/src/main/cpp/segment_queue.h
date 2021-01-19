@@ -27,39 +27,32 @@ typedef struct Segment
     int64_t duration;
 } Segment;
 
+typedef struct SegmentNode {
+    struct Segment segment;
+    struct SegmentNode *next;
+} SegmentNode;
 
 typedef struct SegmentQueue
 {
-    Segment *segments;
+    SegmentNode *head, *tail;
     int size;
-    int rindex;
-    int windex;
+    int64_t frame_count;
     int64_t duration;
-    int seek_req;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
     int abort_request;
 } SegmentQueue;
 
-int segment_queue_init(SegmentQueue *q, int size);
-
-void segment_queue_push(SegmentQueue *q);
-
-Segment *segment_queue_peek_writable(SegmentQueue *q);
-
-void segment_queue_next(SegmentQueue *q);
-
-Segment *segment_queue_peek_readable(SegmentQueue *q);
-
+int segment_queue_init(SegmentQueue *q);
 
 int segment_queue_abort(SegmentQueue *q);
 
+int segment_queue_put(SegmentQueue *q, Segment *segment);
+
+int segment_queue_get(SegmentQueue *q, Segment *segment, int block);
+
+int segment_queue_flush(SegmentQueue *q);
+
 int segment_queue_destroy(SegmentQueue *q);
-
-void segment_queue_seek(SegmentQueue *q, int index);
-
-void segment_queue_complete(SegmentQueue *q);
-
-void segment_queue_print(SegmentQueue *q);
 
 #endif //AVSAMPLES_SEGMENT_QUEUE_H

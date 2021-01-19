@@ -31,6 +31,7 @@ typedef struct RPlayer {
     int segment_count;
     GLRenderer renderer;      // open gl render
     SegmentQueue segment_q;   // gop segment queue
+    Segment *segments;
     int (* msg_loop)(void *);
     void *weak_thiz;
     MessageQueue msg_q;

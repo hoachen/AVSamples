@@ -68,6 +68,7 @@ static int close_write_item(AVFormatContext **oc)
 
 int split_video_by_gop(const char *input_file, const char *output_dir)
 {
+    LOGI("split video by gop start");
     int video_index = -1;
     int ret = 0, i = 0;
     int index = 0;
@@ -104,7 +105,7 @@ int split_video_by_gop(const char *input_file, const char *output_dir)
     while ((ret = av_read_frame(ic, &pkt)) >= 0) {
         if (pkt.stream_index == video_index) {
             if (pkt.flags & AV_PKT_FLAG_KEY) { // 判断是I帧
-                LOGI("read key frame at pts %ld, dts %ld", pkt.pts, pkt.dts);
+//                LOGI("read key frame at pts %ld, dts %ld", pkt.pts, pkt.dts);
                 close_write_item(&oc);
                 ret = start_write_item(&oc, in_stream, &out_stream, output_dir, index++);
                 if (ret < 0)
@@ -123,6 +124,6 @@ int split_video_by_gop(const char *input_file, const char *output_dir)
     close_write_item(&oc);
     if (ic != NULL)
         avformat_close_input(&ic);
-    LOGI("video split done");
+    LOGI("split video by gop done");
     return index;
 }
