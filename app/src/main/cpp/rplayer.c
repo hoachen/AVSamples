@@ -95,6 +95,9 @@ int rplayer_init(RPlayer *player, ANativeWindow *window, int window_width, int w
     player->window_height = window_height;
     player->abort_request = 0;
     player->pause_req = 1;
+    player->seek_req = 0;
+    player->seek_index = -1;
+    player->seek_frame_offset = -1;
     player->segment_count = 0;
     LOGI("%s end", __func__ );
 }
@@ -211,6 +214,7 @@ static void video_work_thread(void *arg)
         LOGI("player has seek req %d, seek to index %d, current decode index %d", player->seek_req, player->seek_index, index);
         if (player->seek_req && index != player->seek_index) {
             index = player->seek_index;
+            player->seek_req = 0;
         } else {
             index = (index+1) % player->segment_count;
         }
@@ -247,8 +251,8 @@ static void reset_seek_req(RPlayer *player)
 {
     pthread_mutex_lock(&player->mutex);
     player->seek_req = 0;
-    player->seek_index = 0;
-    player->seek_frame_offset = 0;
+    player->seek_index = -1;
+    player->seek_frame_offset = -1;
     pthread_mutex_unlock(&player->mutex);
 }
 
@@ -282,16 +286,17 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment) {
 //            usleep(20);
 //            continue;
 //        }
-        if (player->seek_req && segment->index != player->seek_index) {
+        if (player->seek_index >= 0 && segment->index != player->seek_index) {
             LOGI("has seek to need seek to index=%d, "
                  "current index=%d", player->seek_index, segment->index);
             break;
         }
-        if (player->seek_req) {
+        if (player->seek_frame_offset >= 0) {
             frame_index = player->seek_frame_offset;
         } else {
             frame_index++;
         }
+
         // 读取yuv数据
         int ret = 0;
         size_t read_size = 0;
@@ -313,8 +318,7 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment) {
             LOGE("gl render failed...");
             break;
         }
-        if (player->seek_req
-            && segment->index == player->seek_index
+        if (segment->index == player->seek_index
             && frame_index == player->seek_frame_offset) {
             LOGI("reset seek req");
             reset_seek_req(player);
@@ -360,7 +364,7 @@ static void video_render_thread(void *arg)
         if (got_segment < 0) {
             break;
         }
-        if (player->seek_req && segment.index != player->seek_index) {
+        if (player->seek_index >= 0 && segment.index != player->seek_index) {
             LOGI("got segment %d, we need segment %d", segment.index, player->seek_index);
             continue;
         }
