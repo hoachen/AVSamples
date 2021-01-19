@@ -22,6 +22,7 @@ public class ReversePlayer {
     private static final int WHAT_RENDER_FIRST_FRAME = 104;
     private static final int WHAT_PLAYER_STATE_CHANGED = 105;
     private static final int WHAT_SEEK_COMPLETE = 106;
+    private static final int WHAT_PLAYER_POSITION_CHANGED = 107;
 
     private long mNativeHandler;
     private EventHandler mEventHandler;
@@ -139,6 +140,14 @@ public class ReversePlayer {
                     if (mListener != null) {
                         Log.i(TAG, "onSeekComplete");
                         mListener.onSeekComplete();
+                    }
+                    break;
+                case WHAT_PLAYER_POSITION_CHANGED:
+                    long pos = msg.arg1;
+                    long duration = msg.arg2;
+                    if (mListener != null) {
+                        Log.i(TAG, "onProgressUpdated");
+                        mListener.onProgressUpdated(pos, duration);
                     }
                     break;
             }

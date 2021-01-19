@@ -94,14 +94,12 @@ jint JNI_setup_thread_env(JNIEnv **p_env)
 
 static void post_event(JNIEnv *env, jobject weakThiz, jint what, jint arg1, jint arg2)
 {
-    LOGI("call postEventFromNative");
     (*env)->CallStaticVoidMethod(env, g_rplayer_class, g_method_postEventFromNative,
             weakThiz, what, arg1, arg2, NULL);
 }
 
 static void post_event2(JNIEnv *env, jobject weakThiz, jint what, jint arg1, jint arg2, jobject obj)
 {
-    LOGI("call postEventFromNative");
     (*env)->CallStaticVoidMethod(env, g_rplayer_class, g_method_postEventFromNative,
                                  weakThiz, what, arg1, arg2, obj);
 }
@@ -118,18 +116,7 @@ static int message_loop_n(JNIEnv *env, RPlayer *rp)
         if (ret < 0) {
             break;
         }
-        if (ret > 0) {
-            switch (msg.what) {
-                case MSG_PREPARED:
-                case MSG_VIDEO_SIZE_CHANGED:
-                case MSG_COMPLETE:
-                case MSG_ERROR:
-                case MSG_RENDER_FIRST_FRAME:
-                case MSG_PLAYER_STATE_CHANGED:
-                    post_event(env, week_thiz, msg.what, msg.arg1, msg.arg2);
-                    break;
-            }
-        }
+        post_event(env, week_thiz, msg.what, msg.arg1, msg.arg2);
     }
 }
 

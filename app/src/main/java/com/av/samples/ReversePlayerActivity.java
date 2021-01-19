@@ -69,6 +69,30 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
                 mPlayer.seekTo(20000);
             }
         }, 3000);
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mPlayer.seekTo(0);
+            }
+        }, 4500);
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mPlayer.seekTo(30000);
+            }
+        }, 5000);
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mPlayer.seekTo(10000);
+            }
+        }, 6000);
+        mHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mPlayer.seekTo(100000);
+            }
+        }, 7000);
     }
 
     @Override

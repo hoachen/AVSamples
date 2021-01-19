@@ -57,10 +57,9 @@ void *rplayer_get_week_thiz(RPlayer *player)
 
 int rplayer_get_msg(RPlayer *player, AVMessage *msg, int block)
 {
-    LOGI("%s start", __func__ );
     while(1) {
         int ret = msg_queue_get(&player->msg_q, msg, block);
-        LOGI("%s, get msg from msg queue, ret = %d", __func__ , ret);
+//        LOGI("%s, get msg from msg queue, ret = %d", __func__ , ret);
         if (ret < 0)
             return ret;
         switch (msg->what) {
@@ -211,7 +210,7 @@ static void video_work_thread(void *arg)
             usleep(20);
             continue;
         }
-        LOGI("player has seek req %d, seek to index %d, current decode index %d", player->seek_req, player->seek_index, index);
+        LOGI("player seek to index %d, current decode index %d", player->seek_index, index);
         if (player->seek_req && index != player->seek_index) {
             index = player->seek_index;
             player->seek_req = 0;
@@ -254,6 +253,7 @@ static void reset_seek_req(RPlayer *player)
     player->seek_index = -1;
     player->seek_frame_offset = -1;
     pthread_mutex_unlock(&player->mutex);
+    notify_simple1(player, MSG_SEEK_COMPLETE);
 }
 
 static void reverse_render_yuv(RPlayer *player, Segment *segment) {
@@ -326,6 +326,7 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment) {
         int64_t current_pos =
                 segment->start_time / 1000 + frame_index * segment->frame_show_time_ms;
         LOGI("current play pos %ld index=%d, frame_index = %d", current_pos, segment->index, frame_index);
+        notify_simple3(player, MSG_PLAYER_POSITION_CHANGED, current_pos, player->duration / 1000);
         if (segment->index >= player->segment_count) {
             notify_simple1(player, MSG_COMPLETE);
         }
