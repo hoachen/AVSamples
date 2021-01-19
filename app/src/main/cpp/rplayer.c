@@ -211,15 +211,16 @@ static void video_work_thread(void *arg)
             continue;
         }
         LOGI("player seek to index %d, current decode index %d", player->seek_index, index);
-        if (player->seek_req && index != player->seek_index) {
+        if (player->seek_req) {
             index = player->seek_index;
+            segment_queue_flush(&player->segment_q);
             player->seek_req = 0;
         } else {
             index = (index+1) % player->segment_count;
         }
         segment = player->segments + index;
         if (segment->exist) {
-            LOGI("segment %d has exist", index);
+            LOGI("segment %d has exist, put segment into segment queue", index);
             segment_queue_put(&player->segment_q, segment);
             usleep(20);
             continue;
@@ -229,6 +230,7 @@ static void video_work_thread(void *arg)
             segment->frames = frame_count;
             segment->exist = 1;
             segment_queue_put(&player->segment_q, segment);
+            LOGI("start decode segment %d complete", index);
             // 解码出来了第一个gop 回调
             if (!player->prepared) {
                 player->prepared = 1;
@@ -325,7 +327,7 @@ static void reverse_render_yuv(RPlayer *player, Segment *segment) {
         }
         int64_t current_pos =
                 segment->start_time / 1000 + frame_index * segment->frame_show_time_ms;
-        LOGI("current play pos %ld index=%d, frame_index = %d", current_pos, segment->index, frame_index);
+//        LOGI("current play pos %ld index=%d, frame_index = %d", current_pos, segment->index, frame_index);
         notify_simple3(player, MSG_PLAYER_POSITION_CHANGED, current_pos, player->duration / 1000);
         if (segment->index >= player->segment_count) {
             notify_simple1(player, MSG_COMPLETE);
