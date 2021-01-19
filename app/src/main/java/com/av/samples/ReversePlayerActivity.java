@@ -5,14 +5,17 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
+import android.view.DragEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.SeekBar;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatSeekBar;
 
 public class ReversePlayerActivity extends AppCompatActivity implements SurfaceHolder.Callback, ReversePlayer.Listener {
 
@@ -24,6 +27,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
 
     private ReversePlayer mPlayer;
     private SurfaceView mSurfaceView;
+    private AppCompatSeekBar mSeekBar;
     private String mVideoPath;
     private String mVideoTempDir;
     private Handler mHandler;
@@ -41,8 +45,11 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_player);
         mSurfaceView = findViewById(R.id.surface_view);
+        mSeekBar = findViewById(R.id.seek_bar);
+        setSeekBar();
         mSurfaceView.getHolder().addCallback(this);
-        findViewById(R.id.btn_start).setOnClickListener(new View.OnClickListener() {
+        mStartBtn = findViewById(R.id.btn_start);
+        mStartBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startPlayerYuv();
@@ -56,6 +63,30 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         mHandler = new Handler();
     }
 
+    private void setSeekBar() {
+        mSeekBar.setMax(100);
+        mSeekBar.setProgress(0);
+        mSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && mPlayer != null) {
+                    mPlayer.seekTo(progress);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+    }
+
+
     public void startPlayerYuv() {
         Toast.makeText(this, "开始倒序播放", Toast.LENGTH_SHORT).show();
         Log.i(TAG, " start Reverse video");
@@ -63,36 +94,36 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         mPlayer.setDataSource(mVideoPath, mVideoTempDir);
         mPlayer.prepare();
         mPlayer.start();
-        mHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mPlayer.seekTo(20000);
-            }
-        }, 3000);
-        mHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mPlayer.seekTo(0);
-            }
-        }, 4500);
-        mHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mPlayer.seekTo(30000);
-            }
-        }, 5000);
-        mHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mPlayer.seekTo(10000);
-            }
-        }, 6000);
-        mHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mPlayer.seekTo(100000);
-            }
-        }, 7000);
+//        mHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                mPlayer.seekTo(20000);
+//            }
+//        }, 3000);
+//        mHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                mPlayer.seekTo(0);
+//            }
+//        }, 4500);
+//        mHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                mPlayer.seekTo(30000);
+//            }
+//        }, 5000);
+//        mHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                mPlayer.seekTo(10000);
+//            }
+//        }, 6000);
+//        mHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                mPlayer.seekTo(100000);
+//            }
+//        }, 7000);
     }
 
     @Override
@@ -146,5 +177,9 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
     @Override
     public void onProgressUpdated(long pos, long duration) {
         Log.i(TAG, "onProgressUpdated pos=" + pos + ",duration=" + duration);
+        if (mSeekBar.getMax() < duration) {
+            mSeekBar.setMax((int) duration);
+        }
+        mSeekBar.setProgress((int) pos);
     }
 }

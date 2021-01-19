@@ -33,9 +33,4 @@
         android:text="reverse play video"
         android:layout_height="60dp"/>
 
-    <Button
-        android:id="@+id/btn_reverse_effect"
-        android:layout_width="match_parent"
-        android:text="ReverseEffect(MeidaCodec)"
-        android:layout_height="60dp"/>
 </LinearLayout>

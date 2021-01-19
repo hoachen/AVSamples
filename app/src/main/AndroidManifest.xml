@@ -27,7 +27,6 @@
 
         <activity android:name=".YUVPlayerActivity"/>
         <activity android:name=".ReversePlayerActivity"/>
-        <activity android:name=".ReverseEffectActivity"/>
     </application>
 
 </manifest>

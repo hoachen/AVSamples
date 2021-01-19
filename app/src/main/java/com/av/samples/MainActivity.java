@@ -27,7 +27,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         findViewById(R.id.btn_save_yuv).setOnClickListener(this);
         findViewById(R.id.btn_player_yuv).setOnClickListener(this);
         findViewById(R.id.btn_reverse_video).setOnClickListener(this);
-        findViewById(R.id.btn_reverse_effect).setOnClickListener(this);
     }
 
     @Override
@@ -59,11 +58,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btn_reverse_video:
                 reversePlayVideo();
-                break;
-            case R.id.btn_reverse_effect:
-                final String path = getExternalFilesDir("") + "/";
-                String video_path = path + "VID_20210115_142732.mp4";
-                ReverseEffectActivity.startActivity(this, video_path);
                 break;
         }
     }
@@ -122,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void reversePlayVideo() {
         final String path = getExternalFilesDir("") + "/";
-        String video_path = path + "uaJ9p480p.mp4";
+        String video_path = path + "new_video2.mp4";
         String tempDir = path + "reverse_video";
         File file = new File(tempDir);
         file.deleteOnExit();
