@@ -25,7 +25,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
         findViewById(R.id.btn_split_video).setOnClickListener(this);
         findViewById(R.id.btn_save_yuv).setOnClickListener(this);
-        findViewById(R.id.btn_player_yuv).setOnClickListener(this);
         findViewById(R.id.btn_reverse_video).setOnClickListener(this);
     }
 
@@ -52,9 +51,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btn_save_yuv:
                 saveToYuvFile();
-                break;
-            case R.id.btn_player_yuv:
-                playerYuvFile();
                 break;
             case R.id.btn_reverse_video:
                 reversePlayVideo();
@@ -106,12 +102,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
             }
         }).start();
-    }
-
-    private void playerYuvFile() {
-        final String path = getExternalFilesDir("") + "/";
-        String url = path + "uaJ9p480p_temp/temp_" + 0 + ".yuv";
-        YUVPlayerActivity.startActivity(this, url, 480, 854);
     }
 
     private void reversePlayVideo() {

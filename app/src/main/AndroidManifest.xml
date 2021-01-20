@@ -25,7 +25,6 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".YUVPlayerActivity"/>
         <activity android:name=".ReversePlayerActivity"/>
     </application>
 
