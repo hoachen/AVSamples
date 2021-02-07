@@ -19,13 +19,11 @@ include_directories(${FFMPEG_HEADER})
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 file(GLOB media-source media_jni.c log.h
-        video_split.c
         rplayer.c
-        video_convert_yuv.c
         gl_renderer.c
         yuv_player.c
-        segment_queue.c
-        message_queue.c)
+        message_queue.c
+        sei_parser.c)
 
 add_library(media SHARED ${media-source})
 

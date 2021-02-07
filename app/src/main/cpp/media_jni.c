@@ -4,18 +4,17 @@
 #include <jni.h>
 #include <pthread.h>
 #include "log.h"
-#include "video_split.h"
-#include "video_convert_yuv.h"
 #include "yuv_player.h"
 #include "rplayer.h"
+#include "sei_parser.h"
 
 #ifndef NELEM
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
 #endif
 
-#define VIDEO_SPLIT_CLASS "com/av/samples/demux/VideoSplit"
 #define YUV_PLAYER_CLASS "com/av/samples/YUVPlayer"
 #define REVERSE_PLAYER_CLASS "com/av/samples/ReversePlayer"
+#define SEI_PARSER_CLASS "com/av/samples/demux/SeiParser"
 
 static JavaVM *g_jvm;
 static pthread_key_t g_thread_key;
@@ -23,34 +22,6 @@ static pthread_once_t g_key_once = PTHREAD_ONCE_INIT;
 static jclass g_rplayer_class;
 static jmethodID g_method_postEventFromNative;
 
-
-static jint JNI_split_video(JNIEnv *env, jclass class, jstring input_file, jstring output_dir)
-{
-    int ret = 0;
-    char *input_file_str = (*env)->GetStringUTFChars(env, input_file, 0);
-    char *output_dir_str = (*env)->GetStringUTFChars(env, output_dir, 0);
-    ret = split_video_by_gop(input_file_str, output_dir_str);
-    (*env)->ReleaseStringUTFChars(env, input_file, input_file_str);
-    (*env)->ReleaseStringUTFChars(env, output_dir, output_dir_str);
-    return ret;
-}
-
-
-static jint JNI_split_video_to_yuv(JNIEnv *env, jclass class, jstring input_file, jstring output_dir)
-{
-    int ret = 0;
-    char *input_file_str = (*env)->GetStringUTFChars(env, input_file, 0);
-    char *output_dir_str = (*env)->GetStringUTFChars(env, output_dir, 0);
-    ret = decode_to_yuv420(input_file_str, output_dir_str);
-    (*env)->ReleaseStringUTFChars(env, input_file, input_file_str);
-    (*env)->ReleaseStringUTFChars(env, output_dir, output_dir_str);
-    return ret;
-}
-
-static JNINativeMethod video_split_methods[] = {
-        {"_splitVideo", "(Ljava/lang/String;Ljava/lang/String;)I", JNI_split_video},
-        {"_splitVideoToYuv", "(Ljava/lang/String;Ljava/lang/String;)I", JNI_split_video_to_yuv}
-};
 
 static void JNI_thread_destroyed(void* value)
 {
@@ -294,6 +265,21 @@ static JNINativeMethod yuv_player_jni_methods[] = {
         {"_release", "(J)I", JNI_yuv_player_release}
 };
 
+static jint JNI_sei_parser(JNIEnv *env, jclass class, jstring url)
+{
+    int ret = 0;
+    char *url_str = (*env)->GetStringUTFChars(env, url, 0);
+    ret = sei_parser(url_str);
+    (*env)->ReleaseStringUTFChars(env, url, 0);
+    return ret;
+}
+
+static JNINativeMethod sei_parser_jni_methods[] = {
+        {"_parser", "(Ljava/lang/String;)I", JNI_sei_parser},
+};
+
+
+
 // 动态注册
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     JNIEnv* env = NULL;
@@ -301,10 +287,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
         return JNI_ERR;
     }
     g_jvm = vm;
-
-    jclass video_split_class = (*env)->FindClass(env, VIDEO_SPLIT_CLASS);
-    (*env)->RegisterNatives(env, video_split_class, video_split_methods, NELEM(video_split_methods));
-    (*env)->DeleteLocalRef(env, video_split_class);
 
     jclass yuv_player_class = (*env)->FindClass(env, YUV_PLAYER_CLASS);
     (*env)->RegisterNatives(env, yuv_player_class, yuv_player_jni_methods, NELEM(yuv_player_jni_methods));
@@ -320,5 +302,10 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     }
     (*env)->RegisterNatives(env, rplayer_class, rplayer_jni_methods, NELEM(rplayer_jni_methods));
     (*env)->DeleteLocalRef(env, rplayer_class);
+
+    jclass sei_parser_class = (*env)->FindClass(env, SEI_PARSER_CLASS);
+    (*env)->RegisterNatives(env, sei_parser_class, sei_parser_jni_methods, NELEM(sei_parser_jni_methods));
+    (*env)->DeleteLocalRef(env, sei_parser_class);
+
     return JNI_VERSION_1_6;
 }

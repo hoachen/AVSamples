@@ -10,12 +10,45 @@
 #include <unistd.h>
 #include <libavutil/avutil.h>
 #include <android/native_window_jni.h>
-#include "video_split.h"
-#include "video_convert_yuv.h"
+#include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
+#include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
+#include <sys/statfs.h>
 #include "gl_renderer.h"
-#include "segment_queue.h"
 #include "message_queue.h"
 #include "msg_def.h"
+
+
+typedef struct Segment
+{
+    char mp4_path[1024];
+    char yuv_path[1024];
+    int width;
+    int height;
+    int frames;
+    int exist;
+    int index;
+    int64_t start_time;
+    int64_t frame_show_time_ms;
+    int64_t duration;
+} Segment;
+
+typedef struct SegmentNode {
+    struct Segment segment;
+    struct SegmentNode *next;
+} SegmentNode;
+
+typedef struct SegmentQueue
+{
+    SegmentNode *head, *tail;
+    int size;
+    int64_t frame_count;
+    int64_t duration;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int abort_request;
+} SegmentQueue;
 
 typedef struct RPlayer {
     pthread_mutex_t mutex;

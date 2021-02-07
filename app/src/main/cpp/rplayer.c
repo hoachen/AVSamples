@@ -4,6 +4,409 @@
 
 #include "rplayer.h"
 
+#define TEMP_FILE_NAME "temp"
+
+int segment_queue_init(SegmentQueue *q)
+{
+    pthread_mutex_init(&q->mutex, NULL);
+    pthread_cond_init(&q->cond, NULL);
+    q->head = NULL;
+    q->tail = NULL;
+    q->duration = 0;
+    q->frame_count = 0;
+    q->size = 0;
+    q->abort_request = 0;
+}
+
+int segment_queue_abort(SegmentQueue *q)
+{
+    pthread_mutex_lock(&q->mutex);
+    q->abort_request = 1;
+    pthread_cond_signal(&q->cond);
+    pthread_mutex_unlock(&q->mutex);
+}
+
+int segment_queue_put_l(SegmentQueue *q, Segment *segment)
+{
+    if (q->abort_request)
+        return -1;
+    SegmentNode *s1 = (SegmentNode *)malloc(sizeof(SegmentNode));
+    if (!segment) {
+        LOGE("malloc SegmentNode failed");
+        return -1;
+    }
+    memset(s1, 0, sizeof(SegmentNode));
+    s1->next = NULL;
+    s1->segment = *segment;
+
+    if (q->tail) {
+        q->tail->next = s1;
+    }
+    q->tail = s1;
+    if (!q->head) {
+        q->head = q->tail;
+    }
+    q->duration += segment->duration;
+    q->size ++;
+    q->frame_count += segment->frames;
+    pthread_cond_signal(&q->cond);
+    return 0;
+}
+
+int segment_queue_put(SegmentQueue *q, Segment *segment)
+{
+    int ret = 0;
+    pthread_mutex_lock(&q->mutex);
+    ret = segment_queue_put_l(q, segment);
+    pthread_mutex_unlock(&q->mutex);
+    return ret;
+}
+
+int segment_queue_get(SegmentQueue *q, Segment *segment, int block)
+{
+    int ret;
+    SegmentNode *s1 = NULL;
+    pthread_mutex_lock(&q->mutex);
+    for (;;) {
+        if (q->abort_request) {
+            ret = -1;
+            break;
+        }
+        if (q->head) {
+            s1 = q->head;
+            q->head = s1->next;
+            if (!q->head) {
+                q->tail = NULL;
+            }
+            ret = 1;
+            *segment = s1->segment;
+            q->size--;
+            q->duration -= segment->duration;
+            q->frame_count -= segment->frames;
+            // !! free();
+            free(s1);
+            break;
+        } else if (!block) {
+            ret = 0;
+            break;
+        } else {
+            pthread_cond_wait(&q->cond, &q->mutex);
+        }
+    }
+    pthread_mutex_unlock(&q->mutex);
+    return ret;
+}
+
+int segment_queue_flush(SegmentQueue *q)
+{
+    SegmentNode *s1, *s2;
+    pthread_mutex_unlock(&q->mutex);
+    for (s1 = q->head; s1; s1 = s2) {
+        s2 = s1->next;
+        free(s1);
+    }
+    q->head = NULL;
+    q->tail = NULL;
+    q->frame_count = 0;
+    q->size = 0;
+    q->duration = 0;
+    pthread_mutex_unlock(&q->mutex);
+}
+
+int segment_queue_destroy(SegmentQueue *q)
+{
+    segment_queue_flush(q);
+    pthread_cond_destroy(&q->cond);
+    pthread_mutex_destroy(&q->mutex);
+}
+
+
+int write_yuv420_to_file(FILE *file, int width, int height, AVFrame *frame)
+{
+    if(!file || !frame) {
+        return -1;
+    }
+//    LOGI("Write a frame to yuv file %dx%d frame %dx%d", width, height, frame->width, frame->height);
+    fwrite(frame->data[0],1, width * height,   file);     //Y
+    fwrite(frame->data[1],1, width * height / 4, file);  //U
+    fwrite(frame->data[2],1, width * height / 4, file);  //V
+//    int y_size = width * height;
+//    fwrite(frame->data[0], 1, y_size, file);
+//    fwrite(frame->data[1], 1, y_size / 4, file);
+//    fwrite(frame->data[2], 1, y_size / 4, file);
+//    LOGI("Write a frame to yuv file 1");
+    return 0;
+}
+
+int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
+{
+    int ret;
+    ret = avcodec_send_packet(decode_ctx, pkt);
+//    LOGI("avcodec_send_packet %d", ret);
+    if (ret < 0) {
+        return -1;
+    }
+    ret = avcodec_receive_frame(decode_ctx, frame);
+//    LOGI("avcodec_receive_frame %d", ret);
+    if ((ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)) {
+        return 0;
+    }
+    if (ret < 0) {
+        return -1;
+    }
+//    LOGI("avcodec_receive_frame 1 ")
+    return 1;
+}
+
+int decode_to_yuv420(const char *input_file, const char *output_file)
+{
+//    LOGI("video split to yuv start");
+    int video_index = -1;
+    int ret = 0, i = 0;
+    FILE *file = NULL;
+    AVFormatContext  *ic = NULL;
+    AVCodecContext  *decode_ctx;
+    AVCodec         *decode;
+    AVPacket pkt;
+    AVFrame *frame = NULL;
+    AVFrame *frame_yuv = NULL;
+    struct SwsContext *sws_ctx = NULL;
+
+    file = fopen(output_file, "wb");
+    if (!file) {
+        LOGE("open file %s failed..", output_file);
+        return -1;
+    }
+//    LOGI("start decode video %s to %s", input_file, output_file);
+    ret = avformat_open_input(&ic, input_file, NULL, NULL);
+    if (ret != 0) {
+        LOGI("open input format failed %s", av_err2str(ret));
+        return AVERROR(ret);
+    }
+    ret = avformat_find_stream_info(ic, NULL);
+    if (ret != 0) {
+        avformat_close_input(&ic);
+        return AVERROR(ret);
+    }
+    for (i = 0; i < ic->nb_streams; i++) {
+        AVStream *stream = ic->streams[i];
+        if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            video_index = i;
+            break;
+        }
+    }
+    if (video_index < 0) {
+        avformat_close_input(&ic);
+        LOGI("not found video stream");
+        return -1;
+    }
+    AVStream  *video_stream = ic->streams[video_index];
+    decode = avcodec_find_decoder(video_stream->codecpar->codec_id);
+    if (decode == NULL) {
+        avformat_close_input(&ic);
+        LOGI("not found video decoder");
+        return -1;
+    }
+    decode_ctx = avcodec_alloc_context3(decode);
+    if (decode_ctx == NULL) {
+        avformat_close_input(&ic);
+        LOGI("alloc decoder context failed");
+        return -1;
+    }
+    avcodec_parameters_to_context(decode_ctx, video_stream->codecpar);
+
+    ret = avcodec_open2(decode_ctx, decode, NULL);
+    if (ret != 0) {
+        avcodec_free_context(&decode_ctx);
+        avformat_close_input(&ic);
+        return -1;
+    }
+
+    frame = av_frame_alloc();
+    frame_yuv = av_frame_alloc();
+
+    uint8_t *out_buffer = (uint8_t *)av_malloc(av_image_get_buffer_size(AV_PIX_FMT_YUV420P, decode_ctx->width, decode_ctx->height,1));
+    //初始化缓冲区
+    av_image_fill_arrays(frame_yuv->data, frame_yuv->linesize, out_buffer, AV_PIX_FMT_YUV420P, decode_ctx->width, decode_ctx->height, 1);
+    sws_ctx = sws_getContext(decode_ctx->width, decode_ctx->height, decode_ctx->pix_fmt,
+                             decode_ctx->width, decode_ctx->height, AV_PIX_FMT_YUV420P,
+                             SWS_BICUBIC, NULL, NULL, NULL);
+    int frame_count = 0;
+    int got_frame = 0;
+
+
+    while ((ret = av_read_frame(ic, &pkt)) >= 0) {
+        if (pkt.stream_index == video_index) {
+//            LOGI("to decoder video");
+            got_frame = decoder_video(decode_ctx, &pkt, frame);
+            if (got_frame < 0) {
+                LOGI("decoder failed");
+                break;
+            } else if (got_frame == 0) {
+                av_packet_unref(&pkt);
+                continue;
+            }
+//            LOGI("to decoder video %d", got_frame);
+            if (got_frame == 1) {
+//                sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
+//                          frame_yuv->data, frame_yuv->linesize);
+                write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
+                frame_count++;
+            }
+        }
+        av_packet_unref(&pkt);
+
+    }
+    avcodec_flush_buffers(decode_ctx);
+    got_frame = avcodec_receive_frame(decode_ctx, frame);
+    if (got_frame == 0) {
+//        LOGI("avcodec_flush_buffers frame");
+        frame_count++;
+//        sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
+//                  frame_yuv->data, frame_yuv->linesize);
+        write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
+    }
+
+    if (frame) {
+        av_frame_free(&frame);
+    }
+    if (decode_ctx) {
+        avcodec_close(decode_ctx);
+        avcodec_free_context(&decode_ctx);
+    }
+
+    if (ic != NULL)
+        avformat_close_input(&ic);
+    if (file)
+        fclose(file);
+//    LOGI("decode video %s to %s done", input_file, output_file);
+    return frame_count;
+}
+
+static int start_write_item(AVFormatContext **oc, AVStream *in_stream,
+                            AVStream **out_stream, const char *output_dir, int index)
+{
+    int ret = 0;
+    char filename[1024] = {'\0'};
+    sprintf(filename, "%s/%s_%d.mp4", output_dir, TEMP_FILE_NAME, index);
+    LOGI("start write to temp file %s", filename);
+    ret = avformat_alloc_output_context2(oc, NULL, "mp4", filename);
+    if (ret) {
+        return AVERROR(ret);
+    }
+    *out_stream = avformat_new_stream(*oc, NULL);
+    if (*out_stream == NULL) {
+        LOGE("avformat_new_stream failed");
+        return -1;
+    }
+    ret = avcodec_parameters_copy((*out_stream)->codecpar, in_stream->codecpar);
+    if (ret < 0) {
+        LOGE("avcodec_parameters_copy failed");
+        return -1;
+    }
+
+    if (!((*oc)->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&(*oc)->pb, filename, AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            LOGE("Could not open output file '%s'", filename);
+            return AVERROR(ret);
+        }
+    }
+    ret = avformat_write_header(*oc, NULL);
+//    LOGI("avformat_write_header end ret = %d", ret);
+    return ret;
+}
+
+static int write_item_packet(AVFormatContext *oc, AVStream *in_stream, AVStream *out_stream,
+                             AVPacket *pkt, int64_t pts, int64_t dts)
+{
+    if (oc == NULL) {
+        LOGE("output context is NULL");
+        return -1;
+    }
+    int ret;
+    pkt->pts = av_rescale_q_rnd(pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+    pkt->dts = av_rescale_q_rnd(dts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+    pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base, out_stream->time_base);
+    pkt->pos = -1;
+    ret = av_interleaved_write_frame(oc, pkt);
+    return ret;
+}
+
+static int close_write_item(AVFormatContext **oc)
+{
+    if (*oc != NULL) {
+        LOGI("close write to temp file %s", (*oc)->filename);
+        av_write_trailer(*oc);
+        if (!((*oc)->flags & AVFMT_NOFILE))
+            avio_closep(&(*oc)->pb);
+        avformat_free_context(*oc);
+    }
+    return 0;
+}
+
+int split_video_by_gop(const char *input_file, const char *output_dir)
+{
+    LOGI("split video by gop start");
+    int video_index = -1;
+    int ret = 0, i = 0;
+    int index = 0;
+    AVFormatContext  *ic = NULL;
+    AVFormatContext  *oc = NULL;
+    AVStream  *in_stream = NULL;
+    AVStream  *out_stream = NULL;
+    AVPacket pkt;
+//    LOGI("start split video %s to %s", input_file, output_dir);
+    ret = avformat_open_input(&ic, input_file, NULL, NULL);
+    if (ret != 0) {
+        LOGI("open input format failed %s", av_err2str(ret));
+        return AVERROR(ret);
+    }
+    ret = avformat_find_stream_info(ic, NULL);
+    if (ret != 0) {
+        avformat_close_input(&ic);
+        return AVERROR(ret);
+    }
+    for (i = 0; i < ic->nb_streams; i++) {
+        AVStream *stream = ic->streams[i];
+        if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            in_stream = stream;
+            video_index = i;
+            break;
+        }
+    }
+    if (video_index < 0) {
+        avformat_close_input(&ic);
+        LOGI("not found video stream");
+        return -1;
+    }
+    int64_t last_pts = 0, last_dts = 0;
+    while ((ret = av_read_frame(ic, &pkt)) >= 0) {
+        if (pkt.stream_index == video_index) {
+            if (pkt.flags & AV_PKT_FLAG_KEY) { // 判断是I帧
+//                LOGI("read key frame at pts %ld, dts %ld", pkt.pts, pkt.dts);
+                close_write_item(&oc);
+                ret = start_write_item(&oc, in_stream, &out_stream, output_dir, index++);
+                if (ret < 0)
+                    break;
+                last_pts = pkt.pts;
+                last_dts = pkt.dts;
+            }
+            int64_t pts = pkt.pts - last_pts;
+            int64_t dts = pkt.dts - last_pts;
+            ret = write_item_packet(oc, in_stream, out_stream, &pkt, pts, dts);
+//            if (ret < 0)
+//                break;
+        }
+        av_packet_unref(&pkt);
+    }
+    close_write_item(&oc);
+    if (ic != NULL)
+        avformat_close_input(&ic);
+    LOGI("split video by gop done");
+    return index;
+}
+
 static void video_work_thread(void *arg);
 
 static void video_render_thread(void *arg);
@@ -240,6 +643,7 @@ static void video_work_thread(void *arg)
                 player->video_height != segment->height) {
                 player->video_width = segment->width;
                 player->video_height = segment->height;
+                LOGI("video width %d, video height %d", player->video_width, player->video_height);
                 notify_simple3(player, MSG_VIDEO_SIZE_CHANGED, player->video_width,
                                player->video_height);
             }

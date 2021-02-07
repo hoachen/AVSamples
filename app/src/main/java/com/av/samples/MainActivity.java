@@ -7,7 +7,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 
-import com.av.samples.demux.VideoSplit;
+import com.av.samples.demux.SeiParser;
 import com.tbruyelle.rxpermissions2.RxPermissions;
 
 import java.io.File;
@@ -23,9 +23,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        findViewById(R.id.btn_split_video).setOnClickListener(this);
-        findViewById(R.id.btn_save_yuv).setOnClickListener(this);
         findViewById(R.id.btn_reverse_video).setOnClickListener(this);
+        findViewById(R.id.btn_sei_parser).setOnClickListener(this);
     }
 
     @Override
@@ -46,67 +45,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
-            case R.id.btn_split_video:
-                startSplitVideo();
-                break;
-            case R.id.btn_save_yuv:
-                saveToYuvFile();
-                break;
             case R.id.btn_reverse_video:
                 reversePlayVideo();
+                break;
+            case R.id.btn_sei_parser:
+                startSeiParser();
                 break;
         }
     }
 
-    private void startSplitVideo() {
-        final String path = getExternalFilesDir("") + "/";
-        Log.i("CHHH", "path:" + path);
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                String inputFile = path + "uaJ9p480p.mp4";
-                String outputDir = path + "uaJ9p480p_temp";
-                File file = new File(outputDir);
-                file.deleteOnExit();
-                if (!file.exists()) {
-                    file.mkdirs();
-                }
-                Log.i("CHHH", "split to video start");
-                VideoSplit split = new VideoSplit();
-                int fileCount = split.splitVideo(inputFile, outputDir);
-                Log.i("CHHH", "split to video end file count:" + fileCount);
-            }
-        }).start();
-    }
-
-    private void saveToYuvFile() {
-        final String path = getExternalFilesDir("") + "/";
-        Log.i("CHHH", "path:" + path);
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-//                String inputFile = path + "new_video_temps/temp_0.mp4";
-                String outputDir = path + "uaJ9p480p_temp";
-                File file = new File(outputDir);
-                file.deleteOnExit();
-                if (!file.exists()) {
-                    file.mkdirs();
-                }
-                VideoSplit split = new VideoSplit();
-                for (int i = 0; i < 2; i++) {
-                    String inputFile = path + "uaJ9p480p_temp/temp_" + i + ".mp4";
-                    String outputFile = path + "uaJ9p480p_temp/temp_" + i + ".yuv";
-                    Log.i("CHHH", "decoder" + i + " video to yuv start");
-                    int fileCount = split.splitVideoToYuv(inputFile, outputFile);
-                    Log.i("CHHH", "decoder" + i + " video to yuv end fileCount:" + fileCount);
-                }
-            }
-        }).start();
-    }
-
     private void reversePlayVideo() {
         final String path = getExternalFilesDir("") + "/";
-        String video_path = path + "new_video2.mp4";
+        String video_path = path + "new_video.mp4";
         String tempDir = path + "reverse_video";
         File file = new File(tempDir);
         file.deleteOnExit();
@@ -114,5 +64,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             file.mkdirs();
         }
         ReversePlayerActivity.startActivity(this, video_path, tempDir);
+    }
+
+
+    private void startSeiParser() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String url = "http://video-live.watch-it.video/slivee/2uQ_nsVh-Aq_hdshowl.flv";
+                SeiParser._parser(url);
+            }
+        }).start();
     }
 }
