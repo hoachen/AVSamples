@@ -605,13 +605,14 @@ static void video_work_thread(void *arg)
         notify_simple2(player, MSG_ERROR, ERROR_PREPARE_SEGMENT_FAILED);
         return;
     }
+    int max_decodec_gop = FFMIN(player->segment_count, 4);
     // 开始生产yuv
     Segment *segment = NULL;
     int index = -1;
     for (;;) {
         if (player->abort_request)
             break;
-        if (!player->seek_req && (player->pause_req || player->segment_q.size > 3)) { // gop解码的足够多的时候等着消费一段时间
+        if (!player->seek_req && (player->pause_req || player->segment_q.size >= max_decodec_gop)) { // gop解码的足够多的时候等着消费一段时间
             usleep(20);
             continue;
         }
