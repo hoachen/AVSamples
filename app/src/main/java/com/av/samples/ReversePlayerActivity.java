@@ -31,7 +31,8 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
     private String mVideoPath;
     private String mVideoTempDir;
     private Handler mHandler;
-    private Button mStartBtn;
+    private View mPauseView;
+    private View mPauseImageView;
 
     public static void startActivity(Context context, String videoPath, String videoTempDir) {
         Intent intent = new Intent(context, ReversePlayerActivity.class);
@@ -48,11 +49,18 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         mSeekBar = findViewById(R.id.seek_bar);
         setSeekBar();
         mSurfaceView.getHolder().addCallback(this);
-        mStartBtn = findViewById(R.id.btn_start);
-        mStartBtn.setOnClickListener(new View.OnClickListener() {
+        mPauseImageView = findViewById(R.id.iv_pause);
+        mPauseView = findViewById(R.id.view_pause);
+        mPauseImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                startPlayerYuv();
+                pausePlay();
+            }
+        });
+        mPauseView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                pausePlay();
             }
         });
         Intent intent = getIntent();
@@ -86,6 +94,18 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
         });
     }
 
+    public void pausePlay() {
+        if (mPlayer != null) {
+            if (mPauseImageView.getVisibility() == View.VISIBLE) {
+                mPlayer.start();
+                mPauseImageView.setVisibility(View.GONE);
+            } else {
+                mPlayer.pause();
+                mPauseImageView.setVisibility(View.VISIBLE);
+            }
+
+        }
+    }
 
     public void startPlayerYuv() {
         Toast.makeText(this, "开始倒序播放", Toast.LENGTH_SHORT).show();
@@ -140,7 +160,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
 
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder surfaceHolder) {
-
+        startPlayerYuv();
     }
 
     @Override
@@ -156,8 +176,13 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
 
     @Override
     public void onPlayerStateChanged(int state) {
-
-    }
+        Log.i(TAG, "onPlayerStateChanged state=" + state );
+        if (state == ReversePlayer.STATE_PAUSED) {
+            mPauseImageView.setVisibility(View.VISIBLE);
+        } else if (state == ReversePlayer.STATE_STARTED) {
+            mPauseImageView.setVisibility(View.GONE);
+        }
+     }
 
     @Override
     public void onVideoSizeChanged(int width, int height) {
@@ -171,7 +196,7 @@ public class ReversePlayerActivity extends AppCompatActivity implements SurfaceH
 
     @Override
     public void onError(int errorCode) {
-
+        Toast.makeText(this, "播放错误: errorCode=" + errorCode, Toast.LENGTH_SHORT).show();
     }
 
     @Override

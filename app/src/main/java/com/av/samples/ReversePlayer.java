@@ -24,6 +24,16 @@ public class ReversePlayer {
     private static final int WHAT_SEEK_COMPLETE = 106;
     private static final int WHAT_PLAYER_POSITION_CHANGED = 107;
 
+    public static final int STATE_IDLE = 0;
+    public static final int STATE_INITIALIZED = 1;
+    public static final int STATE_ASYNC_PREPARING = 2;
+    public static final int STATE_PREPARED = 3;
+    public static final int STATE_STARTED = 4;
+    public static final int STATE_PAUSED = 5;
+    public static final int STATE_COMPLETED = 6;
+    public static final int STATE_STOPPED = 7;
+    public static final int STATE_ERROR = 8;
+
     private long mNativeHandler;
     private EventHandler mEventHandler;
     private Listener mListener;
@@ -56,6 +66,10 @@ public class ReversePlayer {
 
     public void start() {
         _start(mNativeHandler);
+    }
+
+    public void pause() {
+        _pause(mNativeHandler);
     }
 
     public void stop() {
