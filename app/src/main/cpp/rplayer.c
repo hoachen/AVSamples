@@ -158,7 +158,7 @@ int decoder_video(AVCodecContext *decode_ctx, AVPacket *pkt, AVFrame *frame)
 
 int decode_to_yuv420(const char *input_file, const char *output_file)
 {
-//    LOGI("video split to yuv start");
+    LOGI("%s video decode to yuv start %s ", __func__, input_file);
     int video_index = -1;
     int ret = 0, i = 0;
     FILE *file = NULL;
@@ -175,7 +175,7 @@ int decode_to_yuv420(const char *input_file, const char *output_file)
         LOGE("open file %s failed..", output_file);
         return -1;
     }
-//    LOGI("start decode video %s to %s", input_file, output_file);
+    LOGI("%s avformat_open_input", __func__);
     ret = avformat_open_input(&ic, input_file, NULL, NULL);
     if (ret != 0) {
         LOGI("open input format failed %s", av_err2str(ret));
@@ -193,6 +193,7 @@ int decode_to_yuv420(const char *input_file, const char *output_file)
             break;
         }
     }
+    LOGI("%s find video stream", __func__);
     if (video_index < 0) {
         avformat_close_input(&ic);
         LOGI("not found video stream");
@@ -232,11 +233,12 @@ int decode_to_yuv420(const char *input_file, const char *output_file)
     int frame_count = 0;
     int got_frame = 0;
 
-
+    LOGI("%s start read and decode video", __func__);
     while ((ret = av_read_frame(ic, &pkt)) >= 0) {
         if (pkt.stream_index == video_index) {
-//            LOGI("to decoder video");
+            LOGI("%s start  decoder  a video pkt", __func__ );
             got_frame = decoder_video(decode_ctx, &pkt, frame);
+            LOGI("%s start  decoder  a video pkt end , got_frame=%d", __func__ , got_frame);
             if (got_frame < 0) {
                 LOGI("decoder failed");
                 break;
@@ -248,13 +250,16 @@ int decode_to_yuv420(const char *input_file, const char *output_file)
             if (got_frame == 1) {
 //                sws_scale(sws_ctx, frame->data, frame->linesize, 0, decode_ctx->height,
 //                          frame_yuv->data, frame_yuv->linesize);
+                LOGI("%s start  write  a video frame", __func__ );
                 write_yuv420_to_file(file, decode_ctx->width, decode_ctx->height, frame);
+                LOGI("%s start  write  a video frame end", __func__ );
                 frame_count++;
             }
         }
         av_packet_unref(&pkt);
 
     }
+    LOGI("%s flush  decode buffer", __func__);
     avcodec_flush_buffers(decode_ctx);
     got_frame = avcodec_receive_frame(decode_ctx, frame);
     if (got_frame == 0) {
@@ -272,7 +277,7 @@ int decode_to_yuv420(const char *input_file, const char *output_file)
         avcodec_close(decode_ctx);
         avcodec_free_context(&decode_ctx);
     }
-
+    LOGI("%s close input frame_count = %d", __func__, frame_count);
     if (ic != NULL)
         avformat_close_input(&ic);
     if (file)
@@ -371,6 +376,21 @@ int split_video_by_gop(const char *input_file, const char *output_dir)
             in_stream = stream;
             video_index = i;
             break;
+        }
+    }
+    int gop_frame_count_;
+    for (int i = 0; i < in_stream->nb_index_entries; ++i) {
+        int flags = in_stream->index_entries[i].flags;
+        if (in_stream->index_entries[i].timestamp != AV_NOPTS_VALUE) {
+            // A bug of ffmpeg: av_seek_frame might access stream->index_entries[nb_entries] when last packet is discarded
+            // This bug is fixed by new version: https://github.com/FFmpeg/FFmpeg/commit/fe7547d69e6721d064c8604d0a6375a2d24b35ca
+            // should limit seekable max dts to the max dts of packets without discard flag
+//            max_dts_seekable_ = std::max(max_dts_seekable_, video_stream_->index_entries[i].timestamp);
+        }
+        if (flags & AVINDEX_KEYFRAME) {
+            gop_frame_count_++;
+            LOGI("keyframe dts %ld , gop_frame_count %d", in_stream->index_entries[i].timestamp,
+                 gop_frame_count_);
         }
     }
     if (video_index < 0) {
@@ -631,12 +651,12 @@ static void video_work_thread(void *arg)
             usleep(20);
             continue;
         } else {
-            LOGI("start decode segment %d", index);
+            LOGI("start decode segment %s", segment->mp4_path);
             int frame_count = decode_to_yuv420(segment->mp4_path, segment->yuv_path);
             segment->frames = frame_count;
             segment->exist = 1;
             segment_queue_put(&player->segment_q, segment);
-            LOGI("start decode segment %d complete", index);
+            LOGI("start decode segment %s complete", segment->mp4_path);
             // 解码出来了第一个gop 回调
             if (!player->prepared) {
                 player->prepared = 1;
@@ -842,8 +862,6 @@ int rplayer_seek_l(RPlayer *player, int64_t posUs)
             player->seek_req = 1;
             player->seek_index = i;
             player->seek_frame_offset = (posUs - segment->start_time) / (segment->frame_show_time_ms * 1000) + 1; // offset是从1开始的
-            player->pause_req = 1;
-            rplayer_change_state_l(player, MP_STATE_PAUSED);
             LOGI("seek to segment index = %d, frame offset = %d", player->seek_index, player->seek_frame_offset)
             break;
         }

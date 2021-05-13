@@ -23,7 +23,8 @@ file(GLOB media-source media_jni.c log.h
         gl_renderer.c
         yuv_player.c
         message_queue.c
-        sei_parser.c)
+        sei_parser.c
+        transcode.c)
 
 add_library(media SHARED ${media-source})
 

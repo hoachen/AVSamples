@@ -20,4 +20,19 @@
         android:text="Sei Parser"
         android:layout_height="60dp"/>
 
+
+    <Button
+        android:id="@+id/preview_player"
+        android:layout_width="match_parent"
+        android:text="PreviewPlayer"
+        android:layout_height="60dp"/>
+
+
+
+    <Button
+        android:id="@+id/transcode"
+        android:layout_width="match_parent"
+        android:text="Transcode"
+        android:layout_height="60dp"/>
+
 </LinearLayout>

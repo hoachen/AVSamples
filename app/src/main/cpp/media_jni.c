@@ -7,6 +7,7 @@
 #include "yuv_player.h"
 #include "rplayer.h"
 #include "sei_parser.h"
+#include "transcode.h"
 
 #ifndef NELEM
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
@@ -15,6 +16,7 @@
 #define YUV_PLAYER_CLASS "com/av/samples/YUVPlayer"
 #define REVERSE_PLAYER_CLASS "com/av/samples/ReversePlayer"
 #define SEI_PARSER_CLASS "com/av/samples/demux/SeiParser"
+#define TRANSCODE_CLASS "com/av/samples/Transcode"
 
 static JavaVM *g_jvm;
 static pthread_key_t g_thread_key;
@@ -278,6 +280,61 @@ static JNINativeMethod sei_parser_jni_methods[] = {
         {"_parser", "(Ljava/lang/String;)I", JNI_sei_parser},
 };
 
+static jlong JNI_transcode_create(JNIEnv *env, jclass class)
+{
+    Transcoder *transcoder = create_transcoder();
+    return (intptr_t)transcoder;
+}
+
+
+static jint JNI_transcode_start(JNIEnv *env, jclass class, jlong handle)
+{
+    int ret = 0;
+    Transcoder *transcoder = (Transcoder *)(intptr_t)handle;
+    ret = transcode_start(transcoder);
+    return ret;
+}
+
+static jint JNI_transcode_stop(JNIEnv *env, jclass class, jlong handle)
+{
+    int ret = 0;
+    Transcoder *transcoder = (Transcoder *)(intptr_t)handle;
+//    ret = transcode_stop(transcoder);
+    return ret;
+}
+
+static jint JNI_transcode_destroy(JNIEnv *env, jclass class, jlong handle)
+{
+    int ret = 0;
+    Transcoder *transcoder = (Transcoder *)(intptr_t)handle;
+//    transcode_destroy(transcoder);
+    return ret;
+}
+
+
+static jint JNI_transcode_init(JNIEnv *env, jclass class, jlong handle,
+                               jstring input_path, jstring output_path,
+                               jint width, jint height, jint fps, jint vb,
+                               jint sample_rate, jint channel, jint ab
+)
+{
+    int ret = 0;
+    Transcoder *transcoder = (Transcoder *)(intptr_t)handle;
+    char *input_path_str = (*env)->GetStringUTFChars(env, input_path, 0);
+    char *ouput_path_str = (*env)->GetStringUTFChars(env, output_path, 0);
+    ret = transcode_init(transcoder, input_path_str, ouput_path_str, width, height, fps, vb, sample_rate, channel, ab);
+    (*env)->ReleaseStringUTFChars(env, input_path, input_path_str);
+    (*env)->ReleaseStringUTFChars(env, output_path, ouput_path_str);
+    return ret;
+}
+
+static JNINativeMethod transcode_jni_methods[] = {
+        {"_create", "()J", JNI_transcode_create},
+        {"_init", "(JLjava/lang/String;Ljava/lang/String;IIIIIII)I", JNI_transcode_init},
+        {"_start", "(J)I", JNI_transcode_start},
+        {"_stop", "(J)I", JNI_transcode_stop},
+        {"_destroy", "(J)I", JNI_transcode_destroy}
+};
 
 
 // 动态注册
@@ -306,6 +363,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     jclass sei_parser_class = (*env)->FindClass(env, SEI_PARSER_CLASS);
     (*env)->RegisterNatives(env, sei_parser_class, sei_parser_jni_methods, NELEM(sei_parser_jni_methods));
     (*env)->DeleteLocalRef(env, sei_parser_class);
+
+
+    jclass transcode_class = (*env)->FindClass(env, TRANSCODE_CLASS);
+    (*env)->RegisterNatives(env, transcode_class, transcode_jni_methods, NELEM(transcode_jni_methods));
+    (*env)->DeleteLocalRef(env, transcode_class);
 
     return JNI_VERSION_1_6;
 }

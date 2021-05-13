@@ -26,6 +26,8 @@
         </activity>
 
         <activity android:name=".ReversePlayerActivity"/>
+
+        <activity android:name=".PreviewPlayerActivity"/>
     </application>
 
 </manifest>
