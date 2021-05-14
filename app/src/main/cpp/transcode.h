@@ -16,6 +16,8 @@
 typedef struct StreamContext {
     AVCodecContext *dec_ctx;
     AVCodecContext *enc_ctx;
+    AVFrame *dec_frame;
+    AVFrame *enc_frame;
 } StreamContext;
 
 typedef struct Transcoder_ {
@@ -36,6 +38,8 @@ typedef struct Transcoder_ {
     struct SwrContext *swr_ctx;
     int video_stream_idx;
     int audio_stream_idx;
+    int64_t output_video_pts;
+    int64_t output_audio_pts;
 } Transcoder;
 
 Transcoder *create_transcoder();
