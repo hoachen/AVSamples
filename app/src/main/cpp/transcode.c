@@ -104,6 +104,76 @@ int open_input_file(Transcoder *transcoder)
 }
 
 
+static int select_sample_rate(AVCodec *codec,int rate)
+{
+    int best_rate = 0;
+    int deft_rate = 44100;
+    int surport = 0;
+    const int* p = codec->supported_samplerates;
+    if (!p) {
+        return deft_rate;
+    }
+    while (*p) {
+        best_rate = *p;
+        if (*p == rate) {
+            surport = 1;
+            break;
+        }
+        p++;
+    }
+
+    if (best_rate != rate && best_rate != 0 && best_rate != deft_rate) {
+        return deft_rate;
+    }
+
+    return best_rate;
+}
+
+static enum AVSampleFormat select_sample_format(AVCodec *codec,enum AVSampleFormat fmt)
+{
+    enum AVSampleFormat retfmt = AV_SAMPLE_FMT_NONE;
+    enum AVSampleFormat deffmt = AV_SAMPLE_FMT_FLTP;
+    const enum AVSampleFormat * fmts = codec->sample_fmts;
+    if (!fmts) {
+        return deffmt;
+    }
+    while (*fmts != AV_SAMPLE_FMT_NONE) {
+        retfmt = *fmts;
+        if (retfmt == fmt) {
+            break;
+        }
+        fmts++;
+    }
+    if (retfmt != fmt && retfmt != AV_SAMPLE_FMT_NONE && retfmt != deffmt) {
+        return deffmt;
+    }
+    return retfmt;
+}
+
+static int64_t select_channel_layout(AVCodec *codec,int64_t ch_layout)
+{
+    int64_t retch = 0;
+    int64_t defch = AV_CH_LAYOUT_STEREO;
+    const uint64_t * chs = codec->channel_layouts;
+    if (!chs) {
+        return defch;
+    }
+    while (*chs) {
+        retch = *chs;
+        if (retch == ch_layout) {
+            break;
+        }
+        chs++;
+    }
+    if (retch != ch_layout && retch != AV_SAMPLE_FMT_NONE && retch != defch) {
+        return defch;
+    }
+
+    return retch;
+}
+
+
+
 int open_output_file(Transcoder *trans)
 {
     int ret = 0;
@@ -129,7 +199,7 @@ int open_output_file(Transcoder *trans)
         AVCodecContext* dec_ctx = in_stream->codec;
         if (dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO || dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
             if (dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-                encoder = avcodec_find_decoder(AV_CODEC_ID_H264);
+                encoder = avcodec_find_encoder(AV_CODEC_ID_H264);
                 if (!encoder) {
                     LOGE("No found encoder for h264");
                     return AVERROR_INVALIDDATA;
@@ -142,14 +212,14 @@ int open_output_file(Transcoder *trans)
                 enc_ctx->width = trans->video_width;
                 enc_ctx->height = trans->video_height;
                 enc_ctx->bit_rate = trans->video_bitrate;
-                enc_ctx->pix_fmt = AV_PIX_FMT_NV12;
+                enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 //                enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
                 enc_ctx->framerate = (AVRational){trans->fps,1};
                 enc_ctx->time_base = av_inv_q(enc_ctx->framerate);
                 out_stream->time_base = (AVRational){1, enc_ctx->framerate.num};
                 enc_ctx->time_base = out_stream->time_base;
             } else {
-                encoder = avcodec_find_decoder(AV_CODEC_ID_AAC);
+                encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
                 if (!encoder) {
                     LOGE("No found encoder for aac");
                     return AVERROR_INVALIDDATA;
@@ -159,15 +229,40 @@ int open_output_file(Transcoder *trans)
                     LOGE("Failed to allocate the encoder context\n");
                     return AVERROR(ENOMEM);
                 }
-                enc_ctx->sample_rate = trans->dst_sample_rate;
-                enc_ctx->channel_layout = trans->dst_channel_layout;
+                int ret_sample_rate = select_sample_rate(encoder, trans->dst_sample_rate);
+                if (ret_sample_rate == 0) {
+                    LOGD("cannot support sample_rate %d", trans->dst_sample_rate);
+                    return AVERROR_INVALIDDATA;
+                }
+                enc_ctx->sample_rate = ret_sample_rate;
+                // 采样格式
+                enum AVSampleFormat want_sample_fmt = trans->dst_sample_fmt;
+                enum AVSampleFormat ret_sample_fmt = select_sample_format(encoder, want_sample_fmt);
+                if (ret_sample_fmt == AV_SAMPLE_FMT_NONE) {
+                    LOGD("cannot surpot sample_fmt %d", ret_sample_fmt);
+                    return AVERROR_INVALIDDATA;
+                }
+                enc_ctx->sample_fmt  = ret_sample_fmt;
+                // 声道格式
+                int64_t relt_ch = select_channel_layout(encoder, trans->dst_channel_layout);
+                if (!relt_ch) {
+                    LOGD("cannot surpot channel_layout %d", trans->dst_channel_layout);
+                    return AVERROR_INVALIDDATA;
+                }
+                enc_ctx->channel_layout = relt_ch;
+                // 声道数
+//                enc_ctx->sample_rate = trans->dst_sample_rate;
+//                enc_ctx->channel_layout = trans->dst_channel_layout;
                 enc_ctx->channels = av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
+                enc_ctx->bit_rate = trans->audio_bitrate;
                 /* take first format from list of supported formats */
-                enc_ctx->sample_fmt = trans->dst_sample_fmt;
+//                enc_ctx->sample_fmt = trans->dst_sample_fmt;
                 enc_ctx->time_base = (AVRational){1, enc_ctx->sample_rate};
             }
+
             if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
                 enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
             ret = avcodec_open2(enc_ctx, encoder, NULL);
             if (ret < 0) {
                 LOGE("Cannot open video encoder for stream #%u\n", i);
@@ -239,10 +334,12 @@ AVFrame* new_audio_frame(enum AVSampleFormat sample_fmt, int64_t ch_layout,int s
     int ret = 0;
     if ((ret = av_frame_get_buffer(audio_en_frame, 0)) < 0) {
         LOGD("audio get frame buffer fail %d",ret);
+        av_frame_free(&audio_en_frame);
         return NULL;
     }
-    if ((ret =  av_frame_make_writable(audio_en_frame)) < 0) {
+    if ((ret = av_frame_make_writable(audio_en_frame)) < 0) {
         LOGD("audio av_frame_make_writable fail %d",ret);
+        av_frame_free(&audio_en_frame);
         return NULL;
     }
     return audio_en_frame;
@@ -259,25 +356,16 @@ int convert_video_frame(struct SwsContext *sws_ctx, AVFrame *src_frame, AVFrame 
     return ret;
 }
 
-int convert_audio_frame(struct SwrContext *swr_ctx, AVCodecContext * enc_ctx, AVFrame *src_frame, AVFrame *dst_frame) {
+int convert_audio_frame(struct SwrContext *swr_ctx, StreamContext *stream_ctx, AVFrame *src_frame, AVFrame *dst_frame) {
     int pts_num = 0;
     int ret = 0;
     if (swr_ctx) {
-        int dst_nb_samples = (int)av_rescale_rnd(swr_get_delay(swr_ctx, src_frame->sample_rate) + dst_frame->nb_samples, enc_ctx->sample_rate, src_frame->sample_rate, AV_ROUND_UP);
-        if (dst_nb_samples != dst_frame->nb_samples) {
-            av_frame_free(&dst_frame);
-            dst_frame = new_audio_frame(enc_ctx->sample_fmt, enc_ctx->channel_layout, enc_ctx->sample_rate, dst_nb_samples);
-            if (dst_frame == NULL) {
-                LOGD("can not create audio frame2 ");
-                return AVERROR(ENOMEM);
-            }
-        }
         /** 遇到问题：当音频编码方式不一致时转码后无声音
          *  分析原因：因为每个编码方式对应的AVFrame中的nb_samples不一样，所以再进行编码前要进行AVFrame的转换
          *  解决方案：进行编码前先转换
          */
         // 进行转换
-        ret = swr_convert(swr_ctx, dst_frame->data, dst_nb_samples, (const uint8_t**)src_frame->data, src_frame->nb_samples);
+        ret = swr_convert(swr_ctx, dst_frame->data, dst_frame->nb_samples, (const uint8_t**)src_frame->data, src_frame->nb_samples);
         if (ret < 0) {
             LOGD("swr_convert() fail %d",ret);
             return ret;
@@ -302,21 +390,37 @@ int encode_write_frame(Transcoder *trans, unsigned int stream_index, int flush) 
             if (!stream->enc_frame) {
                 return  AVERROR(ENOMEM);
             }
-            convert_video_frame(trans->sws_ctx, stream->dec_frame, stream->enc_frame);
+            ret = convert_video_frame(trans->sws_ctx, stream->dec_frame, stream->enc_frame);
+            if (ret < 0) {
+                return ret;
+            }
         }
         stream->enc_frame->pts = trans->output_video_pts++;
     } else {
-        stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt,
+        if (!stream->enc_frame) {
+            stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt,
                                             stream->enc_ctx->channel_layout,
                                             stream->enc_ctx->sample_rate,
                                             stream->enc_ctx->frame_size);
-        if (!stream->enc_frame) {
             if (!stream->enc_frame) {
                 return AVERROR(ENOMEM);
             }
-            convert_audio_frame(trans->swr_ctx, stream->enc_ctx, stream->dec_frame, stream->enc_frame);
+            int dst_nb_samples =
+                    av_rescale_rnd(stream->dec_frame->nb_samples, stream->enc_ctx->sample_rate, stream->dec_ctx->sample_rate, AV_ROUND_UP);
+            if (dst_nb_samples != stream->enc_frame->nb_samples) {
+                av_frame_free(&stream->enc_frame);
+                stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt, stream->enc_ctx->channel_layout, stream->enc_ctx->sample_rate, dst_nb_samples);
+                if (stream->enc_frame == NULL) {
+                    LOGD("can not create audio frame2 ");
+                    return -1;
+                }
+            }
+            ret = convert_audio_frame(trans->swr_ctx, stream, stream->dec_frame, stream->enc_frame);
+            if (ret < 0) {
+                return ret;
+            }
         }
-        stream->enc_frame->pts = av_rescale_q(trans->output_audio_pts, (AVRational){1,stream->enc_frame->sample_rate}, stream->dec_ctx->time_base);
+        stream->enc_frame->pts = av_rescale_q(trans->output_audio_pts, (AVRational){1,stream->enc_ctx->sample_rate}, stream->dec_ctx->time_base);
         trans->output_audio_pts += stream->enc_frame->nb_samples;
     }
     LOGI("Encoding a frame stream index #%u\n", stream_index);
@@ -340,7 +444,7 @@ int encode_write_frame(Transcoder *trans, unsigned int stream_index, int flush) 
                              stream->enc_ctx->time_base,
                              trans->ofmt_ctx->streams[stream_index]->time_base);
 
-        LOGD("Muxing frame\n");
+        LOGD("Muxing frame stream index #%u pts %ld\n", enc_pkt.stream_index, enc_pkt.pts);
         /* mux encoded frame */
         ret = av_interleaved_write_frame(trans->ofmt_ctx, &enc_pkt);
         av_packet_unref(&enc_pkt);
@@ -391,7 +495,7 @@ int transcode_start(Transcoder *transcoder)
                                                      (enum AVSampleFormat)stream->dec_ctx->sample_fmt,
                                                      stream->dec_ctx->sample_rate, 0, NULL);
             if ((ret = swr_init(transcoder->swr_ctx)) < 0) {
-                LOGD("swr_alloc_set_opts() fail %d",ret);
+                LOGE("swr_alloc_set_opts() fail %d",ret);
                 return -1;
             }
         }
@@ -401,32 +505,35 @@ int transcode_start(Transcoder *transcoder)
             break;
         }
         stream_index = pkt->stream_index;
-        StreamContext *stream = &transcoder->stream_ctx[stream_index];
-        av_packet_rescale_ts(pkt,
-                             transcoder->ifmt_ctx->streams[stream_index]->time_base,
-                             stream->dec_ctx->time_base);
-        ret = avcodec_send_packet(stream->dec_ctx, pkt);
-        LOGI("send a pkt to decoder #stream_index %d, pks %ld, dts %ld, ret=%d", pkt->stream_index, pkt->pts, pkt->dts, ret);
-        if (ret < 0) {
-            LOGE("Decoding failed %s \n", av_err2str(ret));
-            break;
-        }
-        int exit = 0;
-        while (ret >= 0) {
-            ret = avcodec_receive_frame(stream->dec_ctx, stream->dec_frame);
-            if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN)) {
-                break;
-            } else if (ret < 0) {
-                exit = 1;
+        if (stream_index == transcoder->video_stream_idx || stream_index == transcoder->audio_stream_idx) {
+            StreamContext *stream = &transcoder->stream_ctx[stream_index];
+            av_packet_rescale_ts(pkt,
+                                 transcoder->ifmt_ctx->streams[stream_index]->time_base,
+                                 stream->dec_ctx->time_base);
+            ret = avcodec_send_packet(stream->dec_ctx, pkt);
+            LOGI("send a pkt to decoder #stream_index %d, pks %ld, dts %ld, ret=%d",
+                 pkt->stream_index, pkt->pts, pkt->dts, ret);
+            if (ret < 0) {
+                LOGE("Decoding failed %s \n", av_err2str(ret));
                 break;
             }
-            stream->dec_frame->pts = stream->dec_frame->best_effort_timestamp;
-            ret = encode_write_frame(transcoder, stream_index, 0);
-            if (ret < 0)
-                exit = 1;
-        }
-        if (exit) {
-            break;
+            int exit = 0;
+            while (ret >= 0) {
+                ret = avcodec_receive_frame(stream->dec_ctx, stream->dec_frame);
+                if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN)) {
+                    break;
+                } else if (ret < 0) {
+                    exit = 1;
+                    break;
+                }
+                stream->dec_frame->pts = stream->dec_frame->best_effort_timestamp;
+                ret = encode_write_frame(transcoder, stream_index, 0);
+                if (ret < 0)
+                    exit = 1;
+            }
+            if (exit) {
+                break;
+            }
         }
         av_packet_unref(pkt);
     }
