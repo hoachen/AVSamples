@@ -172,8 +172,6 @@ static int64_t select_channel_layout(AVCodec *codec,int64_t ch_layout)
     return retch;
 }
 
-
-
 int open_output_file(Transcoder *trans)
 {
     int ret = 0;
@@ -382,49 +380,57 @@ int convert_audio_frame(struct SwrContext *swr_ctx, StreamContext *stream_ctx, A
 int encode_write_frame(Transcoder *trans, unsigned int stream_index, int flush) {
     StreamContext *stream = &trans->stream_ctx[stream_index];
     int ret;
-    if (stream->enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
-        if (!stream->enc_frame) {
-            stream->enc_frame = new_video_frame(stream->enc_ctx->pix_fmt,
-                                                stream->enc_ctx->width,
-                                                stream->enc_ctx->height);
+    if (!flush) {
+        if (stream->enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
             if (!stream->enc_frame) {
-                return  AVERROR(ENOMEM);
+                stream->enc_frame = new_video_frame(stream->enc_ctx->pix_fmt,
+                                                    stream->enc_ctx->width,
+                                                    stream->enc_ctx->height);
+                if (!stream->enc_frame) {
+                    return AVERROR(ENOMEM);
+                }
             }
             ret = convert_video_frame(trans->sws_ctx, stream->dec_frame, stream->enc_frame);
             if (ret < 0) {
                 return ret;
             }
-        }
-        stream->enc_frame->pts = trans->output_video_pts++;
-    } else {
-        if (!stream->enc_frame) {
-            stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt,
-                                            stream->enc_ctx->channel_layout,
-                                            stream->enc_ctx->sample_rate,
-                                            stream->enc_ctx->frame_size);
+            stream->enc_frame->pts = trans->output_video_pts++;
+        } else {
             if (!stream->enc_frame) {
-                return AVERROR(ENOMEM);
-            }
-            int dst_nb_samples =
-                    av_rescale_rnd(stream->dec_frame->nb_samples, stream->enc_ctx->sample_rate, stream->dec_ctx->sample_rate, AV_ROUND_UP);
-            if (dst_nb_samples != stream->enc_frame->nb_samples) {
-                av_frame_free(&stream->enc_frame);
-                stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt, stream->enc_ctx->channel_layout, stream->enc_ctx->sample_rate, dst_nb_samples);
-                if (stream->enc_frame == NULL) {
-                    LOGD("can not create audio frame2 ");
-                    return -1;
+                stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt,
+                                                    stream->enc_ctx->channel_layout,
+                                                    stream->enc_ctx->sample_rate,
+                                                    stream->enc_ctx->frame_size);
+                if (!stream->enc_frame) {
+                    return AVERROR(ENOMEM);
+                }
+                int dst_nb_samples =
+                        av_rescale_rnd(stream->enc_frame->nb_samples, stream->enc_ctx->sample_rate,
+                                       stream->dec_ctx->sample_rate, AV_ROUND_UP);
+                if (dst_nb_samples != stream->enc_frame->nb_samples) {
+                    av_frame_free(&stream->enc_frame);
+                    stream->enc_frame = new_audio_frame(stream->enc_ctx->sample_fmt,
+                                                        stream->enc_ctx->channel_layout,
+                                                        stream->enc_ctx->sample_rate,
+                                                        dst_nb_samples);
+                    if (stream->enc_frame == NULL) {
+                        LOGD("can not create audio frame2 ");
+                        return -1;
+                    }
                 }
             }
             ret = convert_audio_frame(trans->swr_ctx, stream, stream->dec_frame, stream->enc_frame);
             if (ret < 0) {
                 return ret;
             }
+            stream->enc_frame->pts = av_rescale_q(trans->output_audio_pts,
+                                                  (AVRational) {1, stream->enc_ctx->sample_rate},
+                                                  stream->dec_ctx->time_base);
+            trans->output_audio_pts += stream->enc_frame->nb_samples;
         }
-        stream->enc_frame->pts = av_rescale_q(trans->output_audio_pts, (AVRational){1,stream->enc_ctx->sample_rate}, stream->dec_ctx->time_base);
-        trans->output_audio_pts += stream->enc_frame->nb_samples;
     }
     LOGI("Encoding a frame stream index #%u\n", stream_index);
-    ret = avcodec_send_frame(stream->enc_ctx, stream->enc_frame);
+    ret = avcodec_send_frame(stream->enc_ctx, flush ? NULL : stream->enc_frame);
     if (ret < 0) {
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
             ret = 0;
@@ -502,6 +508,7 @@ int transcode_start(Transcoder *transcoder)
     }
     while (1) {
         if ((ret = av_read_frame(transcoder->ifmt_ctx, pkt)) < 0) {
+            LOGI("read packet eof");
             break;
         }
         stream_index = pkt->stream_index;
@@ -522,7 +529,7 @@ int transcode_start(Transcoder *transcoder)
                 ret = avcodec_receive_frame(stream->dec_ctx, stream->dec_frame);
                 if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN)) {
                     break;
-                } else if (ret < 0) {
+                } else if (ret < 0) {  // 解码出错
                     exit = 1;
                     break;
                 }
@@ -536,6 +543,15 @@ int transcode_start(Transcoder *transcoder)
             }
         }
         av_packet_unref(pkt);
+    }
+    LOGI("start Flushing encoder\n");
+    /* flush encoders */
+    for (i = 0; i < transcoder->ifmt_ctx->nb_streams; i++) {
+        ret = encode_write_frame(transcoder, i, 1);
+        if (ret < 0) {
+            LOGE("Flushing encoder failed\n");
+            break;
+        }
     }
     av_write_trailer(transcoder->ofmt_ctx);
     return ret;
