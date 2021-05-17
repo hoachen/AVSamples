@@ -299,7 +299,7 @@ static jint JNI_transcode_stop(JNIEnv *env, jclass class, jlong handle)
 {
     int ret = 0;
     Transcoder *transcoder = (Transcoder *)(intptr_t)handle;
-//    ret = transcode_stop(transcoder);
+    ret = transcode_stop(transcoder);
     return ret;
 }
 
@@ -307,7 +307,7 @@ static jint JNI_transcode_destroy(JNIEnv *env, jclass class, jlong handle)
 {
     int ret = 0;
     Transcoder *transcoder = (Transcoder *)(intptr_t)handle;
-//    transcode_destroy(transcoder);
+    transcode_release(transcoder);
     return ret;
 }
 
@@ -333,7 +333,7 @@ static JNINativeMethod transcode_jni_methods[] = {
         {"_init", "(JLjava/lang/String;Ljava/lang/String;IIIIIII)I", JNI_transcode_init},
         {"_start", "(J)I", JNI_transcode_start},
         {"_stop", "(J)I", JNI_transcode_stop},
-        {"_destroy", "(J)I", JNI_transcode_destroy}
+        {"_release", "(J)I", JNI_transcode_destroy}
 };
 
 

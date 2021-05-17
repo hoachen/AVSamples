@@ -21,6 +21,8 @@ Transcoder *create_transcoder()
         transcoder->dst_sample_fmt = AV_SAMPLE_FMT_S16;
         transcoder->output_video_pts = 0;
         transcoder->output_audio_pts = 0;
+        transcoder->abort_request = 0;
+        pthread_mutex_init(&transcoder->mutex, NULL);
     }
     return transcoder;
 }
@@ -51,16 +53,16 @@ int open_input_file(Transcoder *transcoder)
     unsigned i = 0;
     if ((ret = avformat_open_input(&ifmt_ctx, transcoder->input_file, NULL, NULL))  < 0) {
         LOGE("open input file failed err: %s !!!" , av_err2str(ret));
-        return ret;
+        return ERR_OPEN_INPUT;
     }
     if ((ret = avformat_find_stream_info(ifmt_ctx, NULL)) < 0) {
         LOGE("find stream info failed err : %s" , av_err2str(ret));
-        return ret;
+        return ERR_FIND_STREAM_INFO;
     }
     transcoder->ifmt_ctx = ifmt_ctx;
     transcoder->stream_ctx = av_mallocz_array(ifmt_ctx->nb_streams, sizeof(StreamContext));
     if (!transcoder->stream_ctx) {
-        return AVERROR(ENOMEM);
+        return ERR_OPEN_NO_MEM;
     }
     for (i = 0; i < ifmt_ctx->nb_streams; i++) {
         AVStream *stream = ifmt_ctx->streams[i];
@@ -68,18 +70,18 @@ int open_input_file(Transcoder *transcoder)
         AVCodecContext *codec_ctx;
         if (!dec) {
             LOGE("Failed to find decoder for stream #%u", i);
-            return AVERROR_DECODER_NOT_FOUND;
+            return ERR_DECODER_NOT_FOUND;
         }
         codec_ctx = avcodec_alloc_context3(dec);
         if (!codec_ctx) {
             LOGE("Failed to allocate the decoder context for stream #%u", i);
-            return AVERROR(ENOMEM);
+            return ERR_CREATE_DECODER_FAILED;
         }
         ret = avcodec_parameters_to_context(codec_ctx, stream->codecpar);
         if (ret != 0) {
             LOGE("Failed to copy decoder parameters to input decoder context "
                                        "for stream #%u", i);
-            return ret;
+            return ERR_COPY_DECODER_PARAMS_FAILED;
         }
         if (codec_ctx->codec_type == AVMEDIA_TYPE_AUDIO || codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
             if (codec_ctx->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -91,13 +93,13 @@ int open_input_file(Transcoder *transcoder)
             ret = avcodec_open2(codec_ctx, dec, NULL);
             if (ret < 0) {
                 LOGE("Failed to open decoder for stream #%u", i);
-                return ret;
+                return ERR_OPEN_DECODER_FAILED;
             }
         }
         transcoder->stream_ctx[i].dec_ctx = codec_ctx;
         transcoder->stream_ctx[i].dec_frame = av_frame_alloc();
         if (!transcoder->stream_ctx[i].dec_frame) {
-            return AVERROR(ENOMEM);
+            return ERR_OPEN_NO_MEM;
         }
     }
     return 0;
@@ -184,7 +186,7 @@ int open_output_file(Transcoder *trans)
     ret = avformat_alloc_output_context2(&ofmt_ctx, NULL, "mp4", trans->output_file);
     if (!ofmt_ctx) {
         LOGE("open output file failed err: %s", av_err2str(ret));
-        return ret;
+        return ERR_OPEN_OUTPUT;
     }
     trans->ofmt_ctx = ofmt_ctx;
     for (i = 0; i < trans->ifmt_ctx->nb_streams; i++) {
@@ -200,12 +202,12 @@ int open_output_file(Transcoder *trans)
                 encoder = avcodec_find_encoder(AV_CODEC_ID_H264);
                 if (!encoder) {
                     LOGE("No found encoder for h264");
-                    return AVERROR_INVALIDDATA;
+                    return ERR_ENCODER_NOT_FOUND;
                 }
                 enc_ctx = avcodec_alloc_context3(encoder);
                 if (!enc_ctx) {
                     LOGE("Failed to allocate the encoder context\n");
-                    return AVERROR(ENOMEM);
+                    return ERR_OPEN_NO_MEM;
                 }
                 enc_ctx->width = trans->video_width;
                 enc_ctx->height = trans->video_height;
@@ -220,12 +222,12 @@ int open_output_file(Transcoder *trans)
                 encoder = avcodec_find_encoder(AV_CODEC_ID_AAC);
                 if (!encoder) {
                     LOGE("No found encoder for aac");
-                    return AVERROR_INVALIDDATA;
+                    return ERR_ENCODER_NOT_FOUND;
                 }
                 enc_ctx = avcodec_alloc_context3(encoder);
                 if (!enc_ctx) {
                     LOGE("Failed to allocate the encoder context\n");
-                    return AVERROR(ENOMEM);
+                    return ERR_OPEN_NO_MEM;
                 }
                 int ret_sample_rate = select_sample_rate(encoder, trans->dst_sample_rate);
                 if (ret_sample_rate == 0) {
@@ -264,12 +266,12 @@ int open_output_file(Transcoder *trans)
             ret = avcodec_open2(enc_ctx, encoder, NULL);
             if (ret < 0) {
                 LOGE("Cannot open video encoder for stream #%u\n", i);
-                return ret;
+                return ERR_OPEN_ENCODER_FAILED;
             }
             ret = avcodec_parameters_from_context(out_stream->codecpar, enc_ctx);
             if (ret < 0) {
                 LOGI("Failed to copy encoder parameters to output stream #%u\n", i);
-                return ret;
+                return ERR_COPY_ENCODER_PARAMS_FAILED;
             }
             out_stream->time_base = enc_ctx->time_base;
             trans->stream_ctx[i].enc_ctx = enc_ctx;
@@ -296,7 +298,7 @@ int open_output_file(Transcoder *trans)
     ret = avformat_write_header(ofmt_ctx, NULL);
     if (ret < 0) {
         LOGE("Error occurred when opening output file\n");
-        return ret;
+        return ERR_WRITE_HEADER;
     }
     return 0;
 
@@ -465,6 +467,7 @@ int transcode_start(Transcoder *transcoder)
     AVPacket *pkt = NULL;
     unsigned int stream_index;
     unsigned int i;
+    LOGI("start transcode");
     if ((ret = open_input_file(transcoder)) < 0) {
         return ret;
     }
@@ -472,7 +475,7 @@ int transcode_start(Transcoder *transcoder)
         return ret;
     }
     if (!(pkt = av_packet_alloc())) {
-        return AVERROR(ENOMEM);
+        return ERR_OPEN_NO_MEM;
     }
     // 初始化视频重采样
     if (transcoder->video_stream_idx >= 0) {
@@ -484,7 +487,7 @@ int transcode_start(Transcoder *transcoder)
                                                  stream->enc_ctx->width, stream->enc_ctx->height, stream->enc_ctx->pix_fmt, SWS_BICUBIC, NULL, NULL, NULL);
             if (!transcoder->sws_ctx) {
                 LOGE("init sws_context failed");
-                return -1;
+                return ERR_INIT_SWS_CONTEXT;
             }
         }
     }
@@ -502,13 +505,20 @@ int transcode_start(Transcoder *transcoder)
                                                      stream->dec_ctx->sample_rate, 0, NULL);
             if ((ret = swr_init(transcoder->swr_ctx)) < 0) {
                 LOGE("swr_alloc_set_opts() fail %d",ret);
-                return -1;
+                return ERR_INIT_SWR_CONTEXT;
             }
         }
     }
+    int exit = 0;
     while (1) {
+        if (transcoder->abort_request) {
+            LOGI("has abort transcode");
+            ret = 0;
+            break;
+        }
         if ((ret = av_read_frame(transcoder->ifmt_ctx, pkt)) < 0) {
             LOGI("read packet eof");
+            ret = 0;
             break;
         }
         stream_index = pkt->stream_index;
@@ -524,7 +534,6 @@ int transcode_start(Transcoder *transcoder)
                 LOGE("Decoding failed %s \n", av_err2str(ret));
                 break;
             }
-            int exit = 0;
             while (ret >= 0) {
                 ret = avcodec_receive_frame(stream->dec_ctx, stream->dec_frame);
                 if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN)) {
@@ -545,18 +554,68 @@ int transcode_start(Transcoder *transcoder)
         av_packet_unref(pkt);
     }
     LOGI("start Flushing encoder\n");
+    int flush_ret = 0;
     /* flush encoders */
-    for (i = 0; i < transcoder->ifmt_ctx->nb_streams; i++) {
-        ret = encode_write_frame(transcoder, i, 1);
-        if (ret < 0) {
+    for (i = 0; i < transcoder->ofmt_ctx->nb_streams; i++) {
+        flush_ret = encode_write_frame(transcoder, i, 1);
+        if (flush_ret < 0) {
             LOGE("Flushing encoder failed\n");
             break;
         }
     }
     av_write_trailer(transcoder->ofmt_ctx);
+    if (pkt) {
+        av_packet_free(&pkt);
+    }
     return ret;
 }
 
-int transcode_stop(Transcoder *transcoder);
+int transcode_stop(Transcoder *transcoder)
+{
+    pthread_mutex_lock(&transcoder->mutex);
+    transcoder->abort_request = 1;
+    pthread_mutex_unlock(&transcoder->mutex);
+}
 
-void transcode_destroy(Transcoder *transcoder);
+void transcode_release(Transcoder *transcoder)
+{
+    if (transcoder->sws_ctx) {
+        sws_freeContext(transcoder->sws_ctx);
+        transcoder->sws_ctx = NULL;
+    }
+    if (transcoder->swr_ctx) {
+        swr_free(&transcoder->swr_ctx);
+        transcoder->swr_ctx = NULL;
+    }
+    // 释放 解码器，编码器
+    if (transcoder->ifmt_ctx) {
+        for (unsigned int  i = 0; i < transcoder->ifmt_ctx->nb_streams; i++) {
+
+            StreamContext *stream = &transcoder->stream_ctx[i];
+
+            avcodec_free_context(&stream->dec_ctx); // 销毁解码器
+
+            if (transcoder->ofmt_ctx && transcoder->ofmt_ctx->nb_streams > i
+                && transcoder->ofmt_ctx->streams[i] && stream->enc_ctx) {
+                avcodec_free_context(&stream->enc_ctx);
+            }
+            if (stream->dec_frame)
+                av_frame_free(&stream->dec_frame);
+
+            if (stream->enc_frame)
+                av_frame_free(&stream->enc_frame);
+        }
+        avformat_close_input(&transcoder->ifmt_ctx);
+    }
+    if (transcoder->ofmt_ctx) {
+        if (!(transcoder->ofmt_ctx->oformat->flags & AVFMT_NOFILE))
+            avio_closep(&transcoder->ofmt_ctx->pb);
+
+        avformat_free_context(transcoder->ofmt_ctx);
+    }
+    if (transcoder->stream_ctx) {
+        av_free(transcoder->stream_ctx);
+    }
+    pthread_mutex_destroy(&transcoder->mutex);
+    free(transcoder);
+}

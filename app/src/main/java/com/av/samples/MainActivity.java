@@ -9,13 +9,14 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.av.samples.demux.SeiParser;
 import com.tbruyelle.rxpermissions2.RxPermissions;
 
 import java.io.File;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, Transcode.TranscodeListener {
 
     // Used to load the 'native-lib' library on application startup.
     static {
@@ -131,11 +132,28 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void run() {
                 Transcode transcode = new Transcode();
+                transcode.setTranscodeListener(MainActivity.this);
                 transcode.init(srcVideoFilePath, targetVideoFilePath, 240, 426, 15, 500000, 44100, 2, 32000);
                 transcode.start();
+                transcode.release();
             }
         }).start();
     }
 
 
+    @Override
+    public void onTranscodeStart() {
+        Toast.makeText(this, "onTranscodeStart", Toast.LENGTH_SHORT).show();
+
+    }
+
+    @Override
+    public void onTranscodeFailed(int error) {
+        Toast.makeText(this, "onTranscodeFailed err" + error, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onTranscodeComplete() {
+        Toast.makeText(this, "onTranscodeComplete", Toast.LENGTH_SHORT).show();
+    }
 }
