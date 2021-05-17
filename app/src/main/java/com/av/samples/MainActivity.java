@@ -105,7 +105,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void startTranscode() {
 
-
 //        MediaFormat targetVideoFormat = new MediaFormat();
 //        targetVideoFormat.setString(MediaFormat.KEY_MIME, "video/avc");
 //        targetVideoFormat.setInteger(MediaFormat.KEY_BIT_RATE, 1500000); // 设置输出视频码率
@@ -126,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         final String srcVideoFilePath = getExternalCacheDir() + "/video.mp4";
         Log.i("Transcode", "srcVideoFilePath:" + srcVideoFilePath);
 //        Uri sourceVideoUri = Uri.parse(srcVideoFilePath);
-        final String targetVideoFilePath = getExternalCacheDir() + "/new_video.mp4";
+        final String targetVideoFilePath = "aaa/new_video.mp4";
 
         new Thread(new Runnable() {
             @Override
