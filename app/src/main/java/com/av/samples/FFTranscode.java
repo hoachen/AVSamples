@@ -3,7 +3,7 @@ package com.av.samples;
 import android.os.Handler;
 import android.os.Looper;
 
-public class Transcode {
+public class FFTranscode {
 
     private long mNativeHandler = -1L;
 
@@ -11,7 +11,7 @@ public class Transcode {
 
     private Handler mHandler;
 
-    public Transcode() {
+    public FFTranscode() {
         mNativeHandler = _create();
         mHandler = new Handler(Looper.getMainLooper());
     }

@@ -24,7 +24,8 @@ file(GLOB media-source media_jni.c log.h
         yuv_player.c
         message_queue.c
         sei_parser.c
-        transcode.c)
+        transcode.c
+        ff_audio_decoder.c)
 
 add_library(media SHARED ${media-source})
 

@@ -16,7 +16,7 @@
 #define YUV_PLAYER_CLASS "com/av/samples/YUVPlayer"
 #define REVERSE_PLAYER_CLASS "com/av/samples/ReversePlayer"
 #define SEI_PARSER_CLASS "com/av/samples/demux/SeiParser"
-#define TRANSCODE_CLASS "com/av/samples/Transcode"
+#define TRANSCODE_CLASS "com/av/samples/FFTranscode"
 
 static JavaVM *g_jvm;
 static pthread_key_t g_thread_key;
