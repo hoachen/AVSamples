@@ -28,11 +28,17 @@
         android:layout_height="60dp"/>
 
 
-
     <Button
         android:id="@+id/transcode"
         android:layout_width="match_parent"
         android:text="Transcode"
+        android:layout_height="60dp"/>
+
+
+    <Button
+        android:id="@+id/audio_decoder"
+        android:layout_width="match_parent"
+        android:text="AudioDecoder"
         android:layout_height="60dp"/>
 
 </LinearLayout>

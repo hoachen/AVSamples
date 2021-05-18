@@ -11,12 +11,13 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
+import com.av.samples.decoder.FFAudioDecoder;
 import com.av.samples.demux.SeiParser;
 import com.tbruyelle.rxpermissions2.RxPermissions;
 
 import java.io.File;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener, Transcode.TranscodeListener {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, FFTranscode.TranscodeListener {
 
     // Used to load the 'native-lib' library on application startup.
     static {
@@ -31,6 +32,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         findViewById(R.id.btn_sei_parser).setOnClickListener(this);
         findViewById(R.id.preview_player).setOnClickListener(this);
         findViewById(R.id.transcode).setOnClickListener(this);
+        findViewById(R.id.audio_decoder).setOnClickListener(this);
+
 
         final String srcVideoFilePath = getExternalCacheDir() + "/video.mp4";
         Log.i("Transcode", "srcVideoFilePath:" + srcVideoFilePath);
@@ -68,6 +71,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.transcode:
                 startTranscode();
                 break;
+            case R.id.audio_decoder:
+                startAudioDecoder();
+                break;
         }
     }
 
@@ -103,6 +109,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }).start();
     }
 
+
+    private void startAudioDecoder() {
+
+        final String srcVideoFilePath = getExternalCacheDir() + "/video.mp4";
+        Log.i("Transcode", "srcVideoFilePath:" + srcVideoFilePath);
+//        Uri sourceVideoUri = Uri.parse(srcVideoFilePath);
+        final String targetVideoFilePath = "aaa/new_video.mp4";
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                FFAudioDecoder decoder = new FFAudioDecoder();
+                decoder.init(srcVideoFilePath, 2, 44100);
+                decoder.start();
+            }
+        }).start();
+    }
+
+
     private void startTranscode() {
 
 //        MediaFormat targetVideoFormat = new MediaFormat();
@@ -130,7 +155,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         new Thread(new Runnable() {
             @Override
             public void run() {
-                Transcode transcode = new Transcode();
+                FFTranscode transcode = new FFTranscode();
                 transcode.setTranscodeListener(MainActivity.this);
                 transcode.init(srcVideoFilePath, targetVideoFilePath, 240, 426, 15, 500000, 44100, 2, 32000);
                 transcode.start();
@@ -138,6 +163,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }).start();
     }
+
+
 
 
     @Override

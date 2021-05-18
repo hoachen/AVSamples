@@ -8,6 +8,7 @@
 #include "rplayer.h"
 #include "sei_parser.h"
 #include "transcode.h"
+#include "ff_audio_decoder.h"
 
 #ifndef NELEM
 #define NELEM(x) ((int) (sizeof(x) / sizeof((x)[0])))
@@ -17,6 +18,7 @@
 #define REVERSE_PLAYER_CLASS "com/av/samples/ReversePlayer"
 #define SEI_PARSER_CLASS "com/av/samples/demux/SeiParser"
 #define TRANSCODE_CLASS "com/av/samples/FFTranscode"
+#define FF_AUDIO_DECODER_CLASS "com/av/samples/decoder/FFAudioDecoder"
 
 static JavaVM *g_jvm;
 static pthread_key_t g_thread_key;
@@ -337,6 +339,43 @@ static JNINativeMethod transcode_jni_methods[] = {
 };
 
 
+
+static jlong JNI_ff_audio_create(JNIEnv *env, jclass class)
+{
+    Decoder *decoder = ff_decoder_create();
+    return (intptr_t)decoder;
+}
+
+
+static jint JNI_ff_audio_decoder_init(JNIEnv *env, jclass class, jlong handle, jstring input_path, int channel, int sample_rate)
+{
+    int ret = 0;
+    Decoder *decoder = (Decoder *)(intptr_t)handle;
+    char *input_path_str = (*env)->GetStringUTFChars(env, input_path, 0);
+    ret = ff_decoder_init(decoder, input_path_str, channel, sample_rate);
+    (*env)->ReleaseStringUTFChars(env, input_path, input_path_str);
+    return ret;
+}
+
+static jint JNI_ff_audio_decoder_decode(JNIEnv *env, jclass class, jlong handle)
+{
+    int ret = 0;
+    Decoder *decoder = (Decoder *)(intptr_t)handle;
+    uint8_t *buffer;
+    int size;
+    int64_t pts;
+    ret = ff_decoder_decode(decoder, &buffer, &size, &pts);
+    return ret;
+}
+
+
+static JNINativeMethod audio_decoder_jni_methods[] = {
+        {"_create", "()J", JNI_ff_audio_create},
+        {"_init", "(JLjava/lang/String;II)I", JNI_ff_audio_decoder_init},
+        {"_start", "(J)I", JNI_ff_audio_decoder_decode},
+};
+
+
 // 动态注册
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     JNIEnv* env = NULL;
@@ -369,5 +408,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     (*env)->RegisterNatives(env, transcode_class, transcode_jni_methods, NELEM(transcode_jni_methods));
     (*env)->DeleteLocalRef(env, transcode_class);
 
+    jclass audio_decoder_class = (*env)->FindClass(env, FF_AUDIO_DECODER_CLASS);
+    (*env)->RegisterNatives(env, audio_decoder_class, audio_decoder_jni_methods, NELEM(audio_decoder_jni_methods));
+    (*env)->DeleteLocalRef(env, audio_decoder_class);
     return JNI_VERSION_1_6;
 }

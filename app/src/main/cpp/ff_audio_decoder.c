@@ -107,7 +107,7 @@ int ff_decoder_decode(Decoder *decoder, uint8_t **buffer, int *size, int64_t *pt
                 break;
             }
             if (decoder->stream_index == pkt.stream_index) {
-                ret = avcodec_send_frame(decoder->dec_ctx, &pkt);
+                ret = avcodec_send_packet(decoder->dec_ctx, &pkt);
                 if (ret < 0) {
                     LOGE("send packet Decoder failed %s", av_err2str(ret));
                 }
@@ -118,31 +118,31 @@ int ff_decoder_decode(Decoder *decoder, uint8_t **buffer, int *size, int64_t *pt
                     LOGE("Decoder audio failed %s", av_err2str(ret));
                     break;
                 }
-                int src_sample_rate = decoder->dec_ctx->sample_rate;
-                /* compute destination number of samples */
-                int dst_nb_samples = av_rescale_rnd(swr_get_delay(decoder->swr_ctx, src_sample_rate) +
-                                                frame->nb_samples, decoder->dst_sample_rate, src_sample_rate, AV_ROUND_UP);
-                if (dst_nb_samples > decoder->max_dst_nb_samples) {
-                    av_freep(&decoder->dst_data[0]);
-                    ret = av_samples_alloc(decoder->dst_data, &decoder->dst_linesize, decoder->dst_nb_channels,
-                                           dst_nb_samples, decoder->dec_ctx->sample_fmt, 1);
-                    if (ret < 0)
-                        break;
-                    decoder->max_dst_nb_samples = dst_nb_samples;
-                }
                 // 进行重采样
                 if (decoder->swr_ctx) {
+                    int src_sample_rate = decoder->dec_ctx->sample_rate;
+                    /* compute destination number of samples */
+                    int dst_nb_samples = av_rescale_rnd(swr_get_delay(decoder->swr_ctx, src_sample_rate) +
+                                                        frame->nb_samples, decoder->dst_sample_rate, src_sample_rate, AV_ROUND_UP);
+                    if (dst_nb_samples > decoder->max_dst_nb_samples) {
+                        av_freep(&decoder->dst_data[0]);
+                        ret = av_samples_alloc(decoder->dst_data, &decoder->dst_linesize, decoder->dst_nb_channels,
+                                               dst_nb_samples, decoder->dec_ctx->sample_fmt, 1);
+                        if (ret < 0)
+                            break;
+                        decoder->max_dst_nb_samples = dst_nb_samples;
+                    }
                     swr_convert(decoder->swr_ctx, decoder->dst_data, dst_nb_samples, (const uint8_t**)frame->data, frame->nb_samples);
                 } else {
-
+                    int sample_size = av_get_bytes_per_sample(decoder->dec_ctx->sample_fmt);
+                    *size = sample_size * frame->nb_samples * frame->channels;
+                    av_samples_fill_arrays();
+                    av_samples_copy(decoder->dst_data, (const uint8_t**)frame->data, );
                 }
 
             }
             av_packet_unref(&pkt);
         }
-    }
-    if (!decoder->decode_eof) {
-
     }
 }
 
