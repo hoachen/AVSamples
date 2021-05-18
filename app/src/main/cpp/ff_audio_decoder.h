@@ -17,6 +17,12 @@ typedef struct Decoder {
     int stream_index;
     int read_eof;
     int decode_eof;
+    int64_t dst_ch_layout;
+    int dst_sample_rate;
+    int max_dst_nb_samples;
+    int dst_nb_channels;
+    int dst_linesize;
+    uint8_t **dst_data;
 } Decoder;
 
 

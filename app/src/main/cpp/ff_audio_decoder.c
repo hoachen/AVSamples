@@ -12,7 +12,7 @@ Decoder *ff_decoder_create()
     if (decoder) {
         decoder->stream_index = -1;
         decoder->read_eof = 0;
-        decoder->has_flush_decoder = 0;
+        decoder->decode_eof= 0;
     }
     return decoder;
 }
@@ -21,10 +21,8 @@ int ff_decoder_init(Decoder *decoder, const char *input_file_path, int channel, 
 {
     int ret = 0;
     unsigned int i;
-    int64_t dst_channel_layout = AV_CH_LAYOUT_STEREO;
-    dst_channel_layout = (channel == 2) ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
-    int dst_sample_rate = 44100;
-    dst_sample_rate = sample_rate;
+    decoder->dst_ch_layout = (channel == 2) ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
+    decoder->dst_sample_rate = sample_rate;
     if ((ret = avformat_open_input(&decoder->ifmt_ctx, input_file_path, NULL, NULL)) < 0) {
         LOGE("open input failed");
         return ret;
@@ -52,6 +50,14 @@ int ff_decoder_init(Decoder *decoder, const char *input_file_path, int channel, 
                 return ret;
             }
             ret = avcodec_open2(decoder->dec_ctx, dec, NULL);
+
+            decoder->max_dst_nb_samples = av_rescale_rnd( stream->codecpar->frame_size, decoder->dst_sample_rate,
+                                   decoder->dst_sample_rate, AV_ROUND_UP);
+
+            /* buffer is going to be directly written to a rawaudio file, no alignment */
+            decoder->dst_nb_channels = av_get_channel_layout_nb_channels(decoder->dst_ch_layout);
+            ret = av_samples_alloc_array_and_samples(&decoder->dst_data, &decoder->dst_linesize, decoder->dst_nb_channels,
+                                                     decoder->max_dst_nb_samples, decoder->dec_ctx->sample_fmt, 0);
             if (ret < 0) {
                 LOGE("open decoder failed");
                 return ret;
@@ -60,8 +66,8 @@ int ff_decoder_init(Decoder *decoder, const char *input_file_path, int channel, 
         }
     }
     if (decoder->stream_index >= 0 && decoder->dec_ctx) {
-        if (dst_channel_layout != decoder->dec_ctx->channel_layout
-        || dst_sample_rate != decoder->dec_ctx->sample_rate) {
+        if (decoder->dst_ch_layout != decoder->dec_ctx->channel_layout
+        || decoder->dst_sample_rate != decoder->dec_ctx->sample_rate) {
             decoder->swr_ctx = swr_alloc();
             if (!decoder->swr_ctx) {
                 LOGE("alloc swr context failed");
@@ -70,12 +76,12 @@ int ff_decoder_init(Decoder *decoder, const char *input_file_path, int channel, 
             av_opt_set_int(decoder->swr_ctx, "in_channel_layout", decoder->dec_ctx->channel_layout, 0);
             av_opt_set_int(decoder->swr_ctx, "in_sample_rate",    decoder->dec_ctx->channel_layout, 0);
             av_opt_set_sample_fmt(decoder->swr_ctx, "in_sample_fmt", decoder->dec_ctx->sample_fmt, 0);
-            av_opt_set_int(decoder->swr_ctx, "out_channel_layout",    dst_channel_layout, 0);
-            av_opt_set_int(decoder->swr_ctx, "out_sample_rate",       dst_sample_rate, 0);
+            av_opt_set_int(decoder->swr_ctx, "out_channel_layout", decoder->dst_ch_layout, 0);
+            av_opt_set_int(decoder->swr_ctx, "out_sample_rate",   decoder->dst_sample_rate, 0);
             av_opt_set_sample_fmt(decoder->swr_ctx, "out_sample_fmt", decoder->dec_ctx->sample_fmt, 0);
             if ((ret = swr_init(decoder->swr_ctx)) < 0) {
                 LOGE("Failed to initialize the resampling context\n");
-                return -1;
+                return ret;
             }
         }
     }
@@ -86,16 +92,56 @@ int ff_decoder_decode(Decoder *decoder, uint8_t **buffer, int *size, int64_t *pt
 {
     int ret = 0;
     AVPacket pkt;
+    AVFrame *frame;
+    frame = av_frame_alloc();
+    if (!frame) {
+        return AVERROR(ENOMEM);
+    }
     if (decoder->ifmt_ctx && !decoder->read_eof) {
         av_init_packet(&pkt);
-        while ((ret = av_read_frame(decoder->ifmt_ctx, &pkt)) >= 0) {
+        while (1) {
+            ret = av_read_frame(decoder->ifmt_ctx, &pkt);
+            if (ret < 0) {
+                LOGE("read eof");
+                decoder->read_eof = 1;
+                break;
+            }
             if (decoder->stream_index == pkt.stream_index) {
-                ret = avcodec_send_frame(decoder->dec_ctx, )
+                ret = avcodec_send_frame(decoder->dec_ctx, &pkt);
+                if (ret < 0) {
+                    LOGE("send packet Decoder failed %s", av_err2str(ret));
+                }
+                ret = avcodec_receive_frame(decoder->dec_ctx, frame);
+                if (ret == AVERROR(EAGAIN)) {
+                    continue; // 再读一个packet 送给解码器
+                } else if (ret < 0) {
+                    LOGE("Decoder audio failed %s", av_err2str(ret));
+                    break;
+                }
+                int src_sample_rate = decoder->dec_ctx->sample_rate;
+                /* compute destination number of samples */
+                int dst_nb_samples = av_rescale_rnd(swr_get_delay(decoder->swr_ctx, src_sample_rate) +
+                                                frame->nb_samples, decoder->dst_sample_rate, src_sample_rate, AV_ROUND_UP);
+                if (dst_nb_samples > decoder->max_dst_nb_samples) {
+                    av_freep(&decoder->dst_data[0]);
+                    ret = av_samples_alloc(decoder->dst_data, &decoder->dst_linesize, decoder->dst_nb_channels,
+                                           dst_nb_samples, decoder->dec_ctx->sample_fmt, 1);
+                    if (ret < 0)
+                        break;
+                    decoder->max_dst_nb_samples = dst_nb_samples;
+                }
+                // 进行重采样
+                if (decoder->swr_ctx) {
+                    swr_convert(decoder->swr_ctx, decoder->dst_data, dst_nb_samples, (const uint8_t**)frame->data, frame->nb_samples);
+                } else {
+
+                }
+
             }
             av_packet_unref(&pkt);
         }
     }
-    if (!decoder->has_flush_decoder) {
+    if (!decoder->decode_eof) {
 
     }
 }
